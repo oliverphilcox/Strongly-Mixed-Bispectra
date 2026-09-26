@@ -29,7 +29,7 @@ class parameters:
         self.scale_load = self.a_load / (1. + self.a_load * self.H_load / self.k_load) / self.H_load
         self.dscale_load = (-self.dH_load / self.H_load**2 * self.a_load / (1. + self.a_load * self.H_load / self.k_load)
                 + self.a_load / (1. + self.a_load * self.H_load / self.k_load)
-                - self.a_load * (self.a_load * self.H_load**2 / self.k_load + self.a_load * self.dH_load / self.k_load) / (1. + self.a_load * self.H_load / self.k_load)**2 / self.H_load)
+                - (self.a_load / (1. + self.a_load * self.H_load / self.k_load))**2 * (self.H_load**2 + self.dH_load) / self.k_load / self.H_load)
 
 
     # -------- FAST INTERPOLATORS --------

@@ -72,9 +72,9 @@ class theory:
     	k1k3 = (k2**2 - k1**2 - k3**2)/2
     	k2k3 = (k1**2 - k2**2 - k3**2)/2
     	Aabc[1, 1, 1] += -self.lambda3/3 + self.rho*self.lambda2 - self.lambda11 * self.rho**2 + 1*self.kappa1/3*self.rho**3
-    	Aabc[0, 0, 1] += (self.lambda12/3 - self.kappa2*self.rho) * k1k2/self.a**2
-    	Aabc[0, 1, 0] += (self.lambda12/3 - self.kappa2*self.rho) * k1k3/self.a**2
-    	Aabc[1, 0, 0] += (self.lambda12/3 - self.kappa2*self.rho) * k2k3/self.a**2
+    	Aabc[0, 0, 1] += (self.lambda12 - self.kappa2*self.rho)/3 * k1k2/self.a**2
+    	Aabc[0, 1, 0] += (self.lambda12 - self.kappa2*self.rho)/3 * k1k3/self.a**2
+    	Aabc[1, 0, 0] += (self.lambda12 - self.kappa2*self.rho)/3 * k2k3/self.a**2
     	return Aabc
 
     def A_abc_fast(self, k1, k2, k3):  # For initial conditions
@@ -83,9 +83,9 @@ class theory:
         k1k2 = (k3**2 - k1**2 - k2**2) / 2
         k1k3 = (k2**2 - k1**2 - k3**2) / 2
         k2k3 = (k1**2 - k2**2 - k3**2) / 2
-        Aabc[0, 0, 1] += (self.lambda12/3 - self.kappa2 * self.rho) * k1k2 / self.a**2
-        Aabc[0, 1, 0] += (self.lambda12/3 - self.kappa2 * self.rho) * k1k3 / self.a**2
-        Aabc[1, 0, 0] += (self.lambda12/3 - self.kappa2 * self.rho) * k2k3 / self.a**2
+        Aabc[0, 0, 1] += (self.lambda12 - self.kappa2 * self.rho)/3 * k1k2 / self.a**2
+        Aabc[0, 1, 0] += (self.lambda12 - self.kappa2 * self.rho)/3 * k1k3 / self.a**2
+        Aabc[1, 0, 0] += (self.lambda12 - self.kappa2 * self.rho)/3 * k2k3 / self.a**2
         return Aabc
 
     def A_abc_slow(self, k1, k2, k3):
@@ -153,7 +153,7 @@ class theory:
     				uABC[i, Nfield+j, k] = -C123[i, j, k]/H/s
     				uABC[i, j, Nfield+k] = -C132[i, k, j]/H/s
     				uABC[Nfield+i, Nfield+j, Nfield+k] = C321[k, j, i]/H/s
-    				uABC[i, Nfield+j, Nfield+k] = 3.*D123[i, j, k]/H/s/s
+    				uABC[i, Nfield+j, Nfield+k] = -3.*D123[i, j, k]/H/s/s
     				uABC[Nfield+i, j, k] = 3.*A123[i, j, k]/H*s
     				uABC[Nfield+i, Nfield+j, k] = B132[i, k, j]/H
     				uABC[Nfield+i, j, Nfield+k] = B123[i, j, k]/H
