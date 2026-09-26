@@ -1,9 +1,10 @@
 """
-All five tree-level bispectrum shapes of the minimal pi-sigma EFT (quadratic
+The tree-level bispectrum shapes of the minimal pi-sigma EFT (quadratic
 mixing rho treated exactly/non-perturbatively), classified by "exchange
 order" nsigma = number of sigma legs at the single cubic vertex:
 
     nsigma=0  pidot_c^3                        (no exchange,   coupling kapp1)
+    nsigma=0  pidot_c (d_i pi_c)^2             (no exchange,   coupling b; c_s != 1 only)
     nsigma=1  pidot_c^2 sigma                  (single, "||",  coupling lambda11)
     nsigma=1  (d_i pi_c)^2 sigma               (single, "T",   coupling lambda12)
     nsigma=2  pidot_c sigma^2                  (double,        coupling lambda2)
@@ -24,7 +25,7 @@ with W_n^a(beta) = int omega_a(u)(1+2u)^n/(1+u) e^{-beta u} for
 n=0,1,2. All four kernels (W0, W1, W2, V) are computed here from a SINGLE
 cached tabulation of omega_{+1}(u) per (m_eff/H, rho/H) point (channel -1
 follows by conjugation) -- this is the expensive "Level 1" step, done once
-per parameter point regardless of how many of the five shapes or how many
+per parameter point regardless of how many of the shapes or how many
 triangles are later evaluated with it.
 
 For every shape, the sum over the 2^3 channel assignments a_j=+-1 (one per
@@ -35,8 +36,8 @@ factor.
     Q_K(beta) = sum_{a=+-1} exp(a*pi*lambda/2) r_a K^{-a}(beta),   K in {W2, P, V}
 
 The outer Schwinger-parameter (xi) integral uses the measure xi^N e^{-xi}
-with N=2 for four of the five shapes and N=0 for the "perp"/Lambda1 shape
-(the one vertex with two undifferentiated legs), not assumed.
+with N=2 for the shapes without gradients and N=0 for the two with a
+(d_i pi_c)^2 factor (two undifferentiated legs), not assumed.
 
 
 -----------------------------------------------------------------------
@@ -106,22 +107,31 @@ def _panel_gauss_legendre(edges, n_per_panel):
     return np.concatenate(nodes), np.concatenate(weights)
 
 
-# u = exp(t) grid for the leg-kernel integral (same range/resolution as
-# pisigma_pidot3.py, validated there for accuracy down to k_min/k_max~1e-5).
-_T_MIN, _T_MAX, _T_PANEL, _T_PER_PANEL = -30.0, 35.0, 3.0, 14
-_T_EDGES = np.arange(_T_MIN, _T_MAX + _T_PANEL, _T_PANEL)
-_T_NODES, _T_WEIGHTS = _panel_gauss_legendre(_T_EDGES, _T_PER_PANEL)
-_U_NODES = np.exp(_T_NODES)
+def set_grids(t_min=-30.0, t_max=76.0, t_panel=2.0, xi_t_min=-64.0, xi_t_max=4.4, xi_t_panel=1.6, n_per_panel=14):
+    """Set the module-level quadrature grids; called with the defaults at import."""
+    global _T_MIN, _T_MAX, _T_PANEL, _T_PER_PANEL, _T_EDGES, _T_NODES, _T_WEIGHTS, _U_NODES
+    global _XI_T_MIN, _XI_T_MAX, _XI_T_PANEL, _XI_T_PER_PANEL, _XI_T_EDGES, _XI_NODES, _XI_WEIGHTS_N2, _XI_WEIGHTS_N0
+    # u = exp(t) grid for the leg-kernel integral: t_max such that e^{-beta u}
+    # has decayed at the smallest beta = 2 xi e_j, t_panel = 2 to resolve the
+    # u^{+-i mu} oscillation of omega at mu_eff ~ 4.
+    _T_MIN, _T_MAX, _T_PANEL, _T_PER_PANEL = t_min, t_max, t_panel, n_per_panel
+    _T_EDGES = np.arange(_T_MIN, _T_MAX + _T_PANEL, _T_PANEL)
+    _T_NODES, _T_WEIGHTS = _panel_gauss_legendre(_T_EDGES, _T_PER_PANEL)
+    _U_NODES = np.exp(_T_NODES)
 
-# xi = exp(t) grids for the outer Schwinger integral, weight xi^N e^{-xi}
-# (Jacobian xi from the log substitution folded in). N=2 for four of the
-# five shapes; N=0 for the "perp"/Lambda1 shape only.
-_XI_T_MIN, _XI_T_MAX, _XI_T_PANEL, _XI_T_PER_PANEL = -16.0, 4.4, 1.6, 14
-_XI_T_EDGES = np.arange(_XI_T_MIN, _XI_T_MAX + _XI_T_PANEL, _XI_T_PANEL)
-_xi_t_nodes, _xi_t_weights = _panel_gauss_legendre(_XI_T_EDGES, _XI_T_PER_PANEL)
-_XI_NODES = np.exp(_xi_t_nodes)
-_XI_WEIGHTS_N2 = _xi_t_weights * _XI_NODES**3 * np.exp(-_XI_NODES)
-_XI_WEIGHTS_N0 = _xi_t_weights * _XI_NODES**1 * np.exp(-_XI_NODES)
+    # xi = exp(t) grids for the outer Schwinger integral, weight xi^N e^{-xi}
+    # (Jacobian xi from the log substitution folded in). N=2 for the shapes
+    # without gradients; N=0 for the two with a (d_i pi_c)^2 factor, whose
+    # small-xi tail ~ xi_min^{1/2} sets xi_t_min.
+    _XI_T_MIN, _XI_T_MAX, _XI_T_PANEL, _XI_T_PER_PANEL = xi_t_min, xi_t_max, xi_t_panel, n_per_panel
+    _XI_T_EDGES = np.arange(_XI_T_MIN, _XI_T_MAX + _XI_T_PANEL, _XI_T_PANEL)
+    _xi_t_nodes, _xi_t_weights = _panel_gauss_legendre(_XI_T_EDGES, _XI_T_PER_PANEL)
+    _XI_NODES = np.exp(_xi_t_nodes)
+    _XI_WEIGHTS_N2 = _xi_t_weights * _XI_NODES**3 * np.exp(-_XI_NODES)
+    _XI_WEIGHTS_N0 = _xi_t_weights * _XI_NODES**1 * np.exp(-_XI_NODES)
+
+
+set_grids()
 
 
 # ============================================================================
@@ -130,7 +140,7 @@ _XI_WEIGHTS_N0 = _xi_t_weights * _XI_NODES**1 * np.exp(-_XI_NODES)
 
 def build_kernel_table(meff_over_H, rho_over_H, cache_dir=None):
     """
-    The expensive, one-time-per-parameter-point step, shared by all five
+    The expensive, one-time-per-parameter-point step, shared by all the
     shapes: tabulate omega_{+1}(u) at a fixed grid of u values via
     mpmath's hypergeometric function. W0, W1, W2, V (and P = W0 + (beta/2)W1)
     are all derived from this ONE cached tabulation at evaluation time (see
@@ -197,7 +207,7 @@ def build_kernel_table(meff_over_H, rho_over_H, cache_dir=None):
 
 # ============================================================================
 # 4. Level 2: fast (pure-numpy) kernel evaluation and channel-sum
-#    factorization ("Q_leg"), shared by all five shapes
+#    factorization ("Q_leg"), shared by all shapes
 # ============================================================================
 
 def _Wn_plus(n, beta, table):
@@ -205,7 +215,7 @@ def _Wn_plus(n, beta, table):
     beta = np.atleast_1d(np.asarray(beta, dtype=float))
     flat = beta.reshape(-1)
     u = table['u']
-    integrand = table['omega'] * (1 + 2*u)**n / (1 + u) * _T_WEIGHTS * u
+    integrand = table['omega'] * (1 + 2*u)**n / (1 + u) * table.get('w', _T_WEIGHTS) * u
     out = (np.exp(-np.outer(flat, u)) @ integrand) + table['head_W']
     return out.reshape(beta.shape)
 
@@ -215,7 +225,7 @@ def _V_plus(beta, table):
     beta = np.atleast_1d(np.asarray(beta, dtype=float))
     flat = beta.reshape(-1)
     u = table['u']
-    integrand = table['omega'] * u * _T_WEIGHTS * u
+    integrand = table['omega'] * u * table.get('w', _T_WEIGHTS) * u
     out = (np.exp(-np.outer(flat, u)) @ integrand) + table['head_V']
     return out.reshape(beta.shape)
 
@@ -229,7 +239,7 @@ def _K_plus(kernel, beta, table):
     if kernel == 'P':
         # P^a(beta) = W0^a(beta) + (beta/2) W1^a(beta).
         beta_arr = np.atleast_1d(np.asarray(beta, dtype=float))
-        return _Wn_plus(0, beta_arr, table) + (beta_arr/2) * _Wn_plus(1, beta_arr, table)
+        return (_Wn_plus(0, beta_arr, table) + (beta_arr/2) * _Wn_plus(1, beta_arr, table)) / table.get('c', 1.0)
     raise ValueError(f"unknown kernel type {kernel!r}")
 
 
@@ -247,14 +257,14 @@ def _Q_leg(kernel, beta, table):
     per-leg terms rather than an explicit 8-way loop -- see the module
     docstring.
     """
-    boost = np.exp(np.pi * table['lam'] / 2)
+    boost = np.exp(table.get('chi', np.pi * table['lam'] / 2))
     Kp = _K_plus(kernel, beta, table)
     r = table['r_plus']
-    return boost * r * np.conj(Kp) + np.conj(r) * Kp / boost
+    return (boost * r * np.conj(Kp) + np.conj(r) * Kp / boost) / np.sqrt(table.get('c', 1.0))
 
 
 # ============================================================================
-# 5. The five shape functions
+# 5. The shape functions
 # ============================================================================
 
 def shape_pidot3(k1, k2, k3, table):
@@ -336,8 +346,29 @@ def shape_triple(k1, k2, k3, table, mu_over_H=1.0):
     return Nmu * e[0] * e[1] * e[2] * total.real
 
 
+def shape_pidot_gradpi2(k1, k2, k3, table, b_over_H=1.0):
+    """(nsigma=0): the pidot_c (d_i pi_c)^2 / a^2 shape, coupling b set to 1
+    (b = c_s(1-c_s^2)/(2 f_pi^2) in the EFT; vanishes at c_s = 1). c indexes
+    which leg carries the velocity (W2 kernel); the other two are
+    undifferentiated legs (P kernel). Uses the N=0 xi-measure."""
+    kt = k1 + k2 + k3
+    e = [k1/kt, k2/kt, k3/kt]
+    total = 0j
+    for c in range(3):
+        a_e, b_e = e[(c+1) % 3], e[(c+2) % 3]
+        Fc = e[c] * (a_e**2 + b_e**2 - e[c]**2) / (2 * a_e * b_e)
+        prod = _Q_leg('W2', 2*_XI_NODES*e[c], table)
+        for jgleg in range(3):
+            if jgleg != c:
+                prod = prod * _Q_leg('P', 2*_XI_NODES*e[jgleg], table)
+        total += Fc * np.sum(_XI_WEIGHTS_N0 * prod)
+    Nb = -1 / (32 * np.pi) * b_over_H / table['R']**1.5
+    return Nb * total.real
+
+
 _SHAPE_FUNCS = dict(pidot3=shape_pidot3, single_parallel=shape_single_parallel,
-                     single_perp=shape_single_perp, double=shape_double, triple=shape_triple)
+                     single_perp=shape_single_perp, double=shape_double, triple=shape_triple,
+                     pidot_gradpi2=shape_pidot_gradpi2)
 
 
 # ============================================================================
@@ -347,7 +378,7 @@ _SHAPE_FUNCS = dict(pidot3=shape_pidot3, single_parallel=shape_single_parallel,
 def make_triangle_grid(n1=60, n2=60, x1_min=1e-3):
     """Standard normalized triangle grid, k3 fixed to 1, x1=k1/k3 log-spaced,
     x2=k2/k3 spanning the allowed triangle region for each x1. Shared by all
-    five shapes. Returns k1s, k2s, k3s arrays (k3s is all ones)."""
+    shapes. Returns k1s, k2s, k3s arrays (k3s is all ones)."""
     x1_vals = np.geomspace(x1_min, 1.0, n1)
     k1s, k2s, k3s = [], [], []
     for x1 in x1_vals:
