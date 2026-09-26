@@ -14,13 +14,14 @@ This repository computes the tree-level bispectrum of every cubic self- and cros
 
 | File | What it does |
 |---|---|
-| `FastShapes.py` | **Core library.** Exact, semi-analytical bispectrum shapes for all 5 cubic interactions, and their cosine correlation with the equilateral template, as a function of `(m_eff/H, ρ/H)`. This is the main deliverable of the paper's method — see "Method" below. |
+| `FastShapes.py` | **Core library.** Exact, semi-analytical bispectrum shapes for all cubic interactions, and their cosine correlation with the equilateral template, as a function of `(m_eff/H, ρ/H)`. This is the main deliverable of the paper's method — see "Method" below. |
+| `FastShapes_c.py` | The kernel table for a curvature sound speed $c_s\neq1$ (isocurvature sound speed 1), built from the two solutions of a Heun spectral equation. Every shape function of `FastShapes.py` accepts it unchanged. |
 | `FastShapes.ipynb` | Tutorial notebook: reproduces the letter's Figure 1, computes full 3D shapes, cross-checks against `CosmoFlow`, and scans the cosine correlation across parameter space. Start here. |
 | `Solver.py`, `Theory.py`, `Parameters.py` | `CosmoFlow`: an independent numerical solver that integrates the same in-in problem as a system of ODEs in time, without assuming any hierarchy between ρ and H. Used only as a cross-check — orders of magnitude slower than `FastShapes.py`, and not intended for large parameter scans. |
 | `generate_planck_grids.py` | Production script: computes the full shape (and cosine) on a `(μ_eff, lambda)` grid, for all 5 interactions, and writes the public data release. Resumable/checkpointed. |
 | `read_planck_grids.py` | Loads the `.npz` files produced above and makes the standard diagnostic plots (cosine map, single full 3D shape). |
 
-### The five interactions
+### The interactions
 
 The minimal EFT of an inflationary Goldstone $\pi$ coupled to a massive isocurvature field $\sigma$ through a quadratic mixing ρ has exactly five independent cubic self- and cross-interactions (at unit sound speed):
 
@@ -32,13 +33,19 @@ The minimal EFT of an inflationary Goldstone $\pi$ coupled to a massive isocurva
 | $\dot\pi_c\sigma^2$ | $\lambda_2$ | `shape_double` |
 | $\sigma^3$ | $\lambda_3$ | `shape_triple` |
 
+For $c_s\neq1$ the same EFT generates one more cubic interaction, which vanishes at unit sound speed:
+
+| Interaction | Coupling | `FastShapes.py` function |
+|---|---|---|
+| $\dot\pi_c(\partial_i\pi_c)^2/a^2$ | $b$ | `shape_pidot_gradpi2` |
+
 This is the convention used consistently by `Theory.py` (the `CosmoFlow` Lagrangian) and by `FastShapes.py`'s own docstring, and is what `FastShapes.ipynb` cross-checks one against the other.
 
 ---
 
 ## Method (brief)
 
-Because the quadratic mixing is resummed exactly rather than treated as a small perturbation, every one of the five interactions above reduces, at tree level, to a **single-vertex (contact) diagram** — the number of σ legs it carries is simply a bookkeeping label, not an internal exchange line. Each such diagram reduces further to a one-dimensional Schwinger-parameter integral over a product of leg kernels, all built from one weight function $\omega_a(u)$ tabulated once per $(\mu_{\rm eff},\lambda)$ point. This is what makes `FastShapes.py` many orders of magnitude faster than solving the coupled in-in problem numerically (`CosmoFlow`), and is what makes a full parameter-space scan for a Planck analysis computationally tractable at all. See the paper for the full derivation; `FastShapes.py`'s module docstring gives a self-contained summary of the numerical scheme (kernel tabulation, the log-substitution used to handle a marginal boundary singularity, and the channel-sum factorisation).
+Because the quadratic mixing is resummed exactly rather than treated as a small perturbation, every one of the interactions above reduces, at tree level, to a **single-vertex (contact) diagram** — the number of σ legs it carries is simply a bookkeeping label, not an internal exchange line. Each such diagram reduces further to a one-dimensional Schwinger-parameter integral over a product of leg kernels, all built from one weight function $\omega_a(u)$ tabulated once per $(\mu_{\rm eff},\lambda)$ point. This is what makes `FastShapes.py` many orders of magnitude faster than solving the coupled in-in problem numerically (`CosmoFlow`), and is what makes a full parameter-space scan for a Planck analysis computationally tractable at all. See the paper for the full derivation; `FastShapes.py`'s module docstring gives a self-contained summary of the numerical scheme (kernel tabulation, the log-substitution used to handle a marginal boundary singularity, and the channel-sum factorisation). The quadrature grids default to the converged production set; `set_grids` changes them.
 
 ---
 
@@ -62,7 +69,7 @@ Python ≥ 3.9 recommended. `joblib` is only needed for the `CosmoFlow` cross-ch
 from FastShapes import build_kernel_table, shape_pidot3
 
 # table caches everything that depends on (m_eff/H, rho/H) -- build once, reuse for
-# any number of triangles and any of the 5 interactions.
+# any number of triangles and any of the shape functions.
 table = build_kernel_table(meff_over_H=3.5, rho_over_H=3.16)
 
 S = shape_pidot3(k1=1.0, k2=0.8, k3=0.6, table=table)
@@ -91,7 +98,19 @@ cos_grid = scan_cosine_grid_triple(mu_eff_grid, lam_grid, cache_dir='kernel_cach
 
 `cache_dir` matters here: it caches the expensive per-point kernel tabulation to disk, so repeated or resumed scans don't redo work already done — always set it for anything beyond a quick test.
 
-For all three, see `FastShapes.ipynb` for the exact cell-by-cell workflow, including the equivalent calls for the other four interactions and the accompanying plots.
+### 4. Unequal sound speeds
+
+```python
+from FastShapes import shape_pidot3
+from FastShapes_c import build_kernel_table_c
+
+# c_pi = 0.5, c_sigma = 1; the table is used exactly like the one from build_kernel_table
+table = build_kernel_table_c(meff_over_H=3.5, rho_over_H=3.16, c=0.5)
+
+S = shape_pidot3(k1=1.0, k2=0.8, k3=0.6, table=table)
+```
+
+For the first three, see `FastShapes.ipynb` for the exact cell-by-cell workflow, including the equivalent calls for the other four interactions and the accompanying plots.
 
 ---
 
