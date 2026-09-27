@@ -40,10 +40,10 @@ class solver():
 
 		#Speed of sound
 		theo = theory(N = self.Nspan, Nfield = self.Nfield, interpolated = self.interpolated)
-		SigmaAB_Re_init[0, 0] = (1 + self.initial.H**2 * self.initial.a**2/k**2)
-		SigmaAB_Re_init[Nfield, Nfield] *= 1
-		SigmaAB_Re_init[0, Nfield] *= 1
-		SigmaAB_Re_init[Nfield, 0] *= 1
+		SigmaAB_Re_init[0, 0] = (1 + self.initial.H**2 * self.initial.a**2/k**2/self.initial.cs**2)/self.initial.cs
+		SigmaAB_Re_init[Nfield, Nfield] *= self.initial.cs
+		SigmaAB_Re_init[0, Nfield] *= 1/self.initial.cs
+		SigmaAB_Re_init[Nfield, 0] *= 1/self.initial.cs
 
 		return 1/(2*k*self.initial.a**2) * SigmaAB_Re_init
 

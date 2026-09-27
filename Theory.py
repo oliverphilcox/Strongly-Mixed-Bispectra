@@ -1,6 +1,7 @@
 import numpy as np
 
 class theory:
+    cs = 1.
 
     def __init__(self, N, Nfield, interpolated):
         self.N = N
@@ -59,7 +60,7 @@ class theory:
     def M_ab(self, k):
     	Nfield = self.Nfield
     	Mab = np.eye(Nfield)
-    	Mab[0, 0] = -k**2/self.a**2
+    	Mab[0, 0] = -self.cs**2*k**2/self.a**2
     	Mab[1, 1] = -k**2/self.a**2 - self.m2 - self.rho**2
     	return Mab
 
