@@ -4,7 +4,7 @@ mixing rho treated exactly/non-perturbatively), classified by "exchange
 order" nsigma = number of sigma legs at the single cubic vertex:
 
     nsigma=0  pidot_c^3                        (no exchange,   coupling kapp1)
-    nsigma=0  pidot_c (d_i pi_c)^2             (no exchange,   coupling b; c_s != 1 only)
+    nsigma=0  pidot_c (d_i pi_c)^2             (no exchange,   coupling b)
     nsigma=1  pidot_c^2 sigma                  (single, "||",  coupling lambda11)
     nsigma=1  (d_i pi_c)^2 sigma               (single, "T",   coupling lambda12)
     nsigma=2  pidot_c sigma^2                  (double,        coupling lambda2)
@@ -108,21 +108,16 @@ def _panel_gauss_legendre(edges, n_per_panel):
 
 
 def set_grids(t_min=-30.0, t_max=76.0, t_panel=2.0, xi_t_min=-64.0, xi_t_max=4.4, xi_t_panel=1.6, n_per_panel=14):
-    """Set the module-level quadrature grids; called with the defaults at import."""
     global _T_MIN, _T_MAX, _T_PANEL, _T_PER_PANEL, _T_EDGES, _T_NODES, _T_WEIGHTS, _U_NODES
     global _XI_T_MIN, _XI_T_MAX, _XI_T_PANEL, _XI_T_PER_PANEL, _XI_T_EDGES, _XI_NODES, _XI_WEIGHTS_N2, _XI_WEIGHTS_N0
-    # u = exp(t) grid for the leg-kernel integral: t_max such that e^{-beta u}
-    # has decayed at the smallest beta = 2 xi e_j, t_panel = 2 to resolve the
-    # u^{+-i mu} oscillation of omega at mu_eff ~ 4.
+    # u = exp(t) grid for the leg-kernel integral.
     _T_MIN, _T_MAX, _T_PANEL, _T_PER_PANEL = t_min, t_max, t_panel, n_per_panel
     _T_EDGES = np.arange(_T_MIN, _T_MAX + _T_PANEL, _T_PANEL)
     _T_NODES, _T_WEIGHTS = _panel_gauss_legendre(_T_EDGES, _T_PER_PANEL)
     _U_NODES = np.exp(_T_NODES)
 
     # xi = exp(t) grids for the outer Schwinger integral, weight xi^N e^{-xi}
-    # (Jacobian xi from the log substitution folded in). N=2 for the shapes
-    # without gradients; N=0 for the two with a (d_i pi_c)^2 factor, whose
-    # small-xi tail ~ xi_min^{1/2} sets xi_t_min.
+    # (Jacobian xi from the log substitution folded in).
     _XI_T_MIN, _XI_T_MAX, _XI_T_PANEL, _XI_T_PER_PANEL = xi_t_min, xi_t_max, xi_t_panel, n_per_panel
     _XI_T_EDGES = np.arange(_XI_T_MIN, _XI_T_MAX + _XI_T_PANEL, _XI_T_PANEL)
     _xi_t_nodes, _xi_t_weights = _panel_gauss_legendre(_XI_T_EDGES, _XI_T_PER_PANEL)
@@ -225,7 +220,7 @@ def _V_plus(beta, table):
     beta = np.atleast_1d(np.asarray(beta, dtype=float))
     flat = beta.reshape(-1)
     u = table['u']
-    integrand = table['omega'] * u * table.get('w', _T_WEIGHTS) * u
+    integrand = table.get('omega_V', table['omega']) * u * table.get('w', _T_WEIGHTS) * u
     out = (np.exp(-np.outer(flat, u)) @ integrand) + table['head_V']
     return out.reshape(beta.shape)
 
@@ -239,7 +234,7 @@ def _K_plus(kernel, beta, table):
     if kernel == 'P':
         # P^a(beta) = W0^a(beta) + (beta/2) W1^a(beta).
         beta_arr = np.atleast_1d(np.asarray(beta, dtype=float))
-        return (_Wn_plus(0, beta_arr, table) + (beta_arr/2) * _Wn_plus(1, beta_arr, table)) / table.get('c', 1.0)
+        return (_Wn_plus(0, beta_arr, table) + (beta_arr/2) * _Wn_plus(1, beta_arr, table)) / table.get('v', 1.0)
     raise ValueError(f"unknown kernel type {kernel!r}")
 
 
@@ -260,7 +255,7 @@ def _Q_leg(kernel, beta, table):
     boost = np.exp(table.get('chi', np.pi * table['lam'] / 2))
     Kp = _K_plus(kernel, beta, table)
     r = table['r_plus']
-    return (boost * r * np.conj(Kp) + np.conj(r) * Kp / boost) / np.sqrt(table.get('c', 1.0))
+    return (boost * r * np.conj(Kp) + np.conj(r) * Kp / boost) * table.get('v', 1.0) / table.get('c', 1.0)**1.5
 
 
 # ============================================================================
@@ -347,9 +342,8 @@ def shape_triple(k1, k2, k3, table, mu_over_H=1.0):
 
 
 def shape_pidot_gradpi2(k1, k2, k3, table, b_over_H=1.0):
-    """(nsigma=0): the pidot_c (d_i pi_c)^2 / a^2 shape, coupling b set to 1
-    (b = c_s(1-c_s^2)/(2 f_pi^2) in the EFT; vanishes at c_s = 1). c indexes
-    which leg carries the velocity (W2 kernel); the other two are
+    """(nsigma=0): the pidot_c (d_i pi_c)^2 / a^2 shape, coupling b set to 1.
+    c indexes which leg carries the velocity (W2 kernel); the other two are
     undifferentiated legs (P kernel). Uses the N=0 xi-measure."""
     kt = k1 + k2 + k3
     e = [k1/kt, k2/kt, k3/kt]
