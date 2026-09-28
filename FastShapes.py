@@ -207,20 +207,20 @@ def build_kernel_table(meff_over_H, rho_over_H, cache_dir=None):
 
 def _Wn_plus(n, beta, table):
     """W_n^{+1}(beta) = int omega_+1(u) (1+2u)^n/(1+u) e^{-beta u}, n=0,1,2."""
-    beta = np.atleast_1d(np.asarray(beta, dtype=float))
+    beta = np.atleast_1d(np.asarray(beta))
     flat = beta.reshape(-1)
     u = table['u']
-    integrand = table['omega'] * (1 + 2*u)**n / (1 + u) * table.get('w', _T_WEIGHTS) * u
+    integrand = table.get('rho', table.get('omega')) * (1 + 2*u)**n / (1 + u) * table.get('w', _T_WEIGHTS) * u
     out = (np.exp(-np.outer(flat, u)) @ integrand) + table['head_W']
     return out.reshape(beta.shape)
 
 
 def _V_plus(beta, table):
     """V_{+1}(beta) = int omega_+1(u) u e^{-beta u}."""
-    beta = np.atleast_1d(np.asarray(beta, dtype=float))
+    beta = np.atleast_1d(np.asarray(beta))
     flat = beta.reshape(-1)
     u = table['u']
-    integrand = table.get('omega_V', table['omega']) * u * table.get('w', _T_WEIGHTS) * u
+    integrand = table.get('rho_V', table.get('omega')) * u * table.get('w', _T_WEIGHTS) * u
     out = (np.exp(-np.outer(flat, u)) @ integrand) + table['head_V']
     return out.reshape(beta.shape)
 
@@ -233,7 +233,7 @@ def _K_plus(kernel, beta, table):
         return _V_plus(beta, table)
     if kernel == 'P':
         # P^a(beta) = W0^a(beta) + (beta/2) W1^a(beta).
-        beta_arr = np.atleast_1d(np.asarray(beta, dtype=float))
+        beta_arr = np.atleast_1d(np.asarray(beta))
         return (_Wn_plus(0, beta_arr, table) + (beta_arr/2) * _Wn_plus(1, beta_arr, table)) / table.get('v', 1.0)
     raise ValueError(f"unknown kernel type {kernel!r}")
 
@@ -252,10 +252,19 @@ def _Q_leg(kernel, beta, table):
     per-leg terms rather than an explicit 8-way loop -- see the module
     docstring.
     """
-    boost = np.exp(table.get('chi', np.pi * table['lam'] / 2))
+    boost = np.exp(np.pi * table['lam'] / 2)
     Kp = _K_plus(kernel, beta, table)
+    if 'rho' in table:  # c != 1: the channel sum is in rho; Im of the legs on the real-time contour is the commutator
+        L, n = Kp * np.exp(-beta / 2), table['n_rt']
+        L[:n] = L[:n].real + 1j * table['commutator'](kernel, (beta[:n] / 2j).real)
+        return L * table['v'] / table['c']**1.5
     r = table['r_plus']
-    return (boost * r * np.conj(Kp) + np.conj(r) * Kp / boost) * table.get('v', 1.0) / table.get('c', 1.0)**1.5
+    return boost * r * np.conj(Kp) + np.conj(r) * Kp / boost
+
+
+def _contour(table):
+    """The Schwinger contour and its N=2, N=0 weights: the table's own (c != 1), else the real xi axis."""
+    return table.get('xi', _XI_NODES), table.get('w_N2', _XI_WEIGHTS_N2), table.get('w_N0', _XI_WEIGHTS_N0)
 
 
 # ============================================================================
@@ -265,11 +274,12 @@ def _Q_leg(kernel, beta, table):
 def shape_pidot3(k1, k2, k3, table):
     """(nsigma=0): the pidot_c^3 shape, coupling lambda2 set to 1."""
     kt = k1 + k2 + k3
+    xi, w_N2, w_N0 = _contour(table)
     e1, e2, e3 = k1/kt, k2/kt, k3/kt
-    Q1 = _Q_leg('W2', 2*_XI_NODES*e1, table)
-    Q2 = _Q_leg('W2', 2*_XI_NODES*e2, table)
-    Q3 = _Q_leg('W2', 2*_XI_NODES*e3, table)
-    integral = np.sum(_XI_WEIGHTS_N2 * Q1 * Q2 * Q3)
+    Q1 = _Q_leg('W2', 2*xi*e1, table)
+    Q2 = _Q_leg('W2', 2*xi*e2, table)
+    Q3 = _Q_leg('W2', 2*xi*e3, table)
+    integral = np.sum(w_N2 * Q1 * Q2 * Q3)
     N = 3 / (32 * np.pi) * table['R']**(-1.5)
     return N * e1 * e2 * e3 * integral.real
 
@@ -279,14 +289,15 @@ def shape_single_parallel(k1, k2, k3, table, Lambda2_over_H=1.0):
     of the three legs carries the sigma (V kernel); the other two are
     velocity legs (W2)."""
     kt = k1 + k2 + k3
+    xi, w_N2, w_N0 = _contour(table)
     e = [k1/kt, k2/kt, k3/kt]
     total = 0j
     for c in range(3):
-        prod = _Q_leg('V', 2*_XI_NODES*e[c], table)
+        prod = _Q_leg('V', 2*xi*e[c], table)
         for jgleg in range(3):
             if jgleg != c:
-                prod = prod * _Q_leg('W2', 2*_XI_NODES*e[jgleg], table)
-        total += np.sum(_XI_WEIGHTS_N2 * prod)
+                prod = prod * _Q_leg('W2', 2*xi*e[jgleg], table)
+        total += np.sum(w_N2 * prod)
     N2 = -1 / (16 * np.pi) * (1.0 / Lambda2_over_H) / (table['lam'] * table['R']**1.5)
     return N2 * e[0] * e[1] * e[2] * total.real
 
@@ -297,16 +308,17 @@ def shape_single_perp(k1, k2, k3, table, Lambda1_over_H=1.0):
     undifferentiated legs (P kernel). Uses the N=0 (not N=2) xi-measure.
     See the module-level caveat about this channel's overall sign."""
     kt = k1 + k2 + k3
+    xi, w_N2, w_N0 = _contour(table)
     e = [k1/kt, k2/kt, k3/kt]
     total = 0j
     for c in range(3):
         a_e, b_e = e[(c+1) % 3], e[(c+2) % 3]
         Fc = e[c] * (a_e**2 + b_e**2 - e[c]**2) / (2 * a_e * b_e)
-        prod = _Q_leg('V', 2*_XI_NODES*e[c], table)
+        prod = _Q_leg('V', 2*xi*e[c], table)
         for jgleg in range(3):
             if jgleg != c:
-                prod = prod * _Q_leg('P', 2*_XI_NODES*e[jgleg], table)
-        total += Fc * np.sum(_XI_WEIGHTS_N0 * prod)
+                prod = prod * _Q_leg('P', 2*xi*e[jgleg], table)
+        total += Fc * np.sum(w_N0 * prod)
     N1 = +1 / (16 * np.pi) * (1.0 / Lambda1_over_H) / (table['lam'] * table['R']**1.5)
     return N1 * total.real
 
@@ -316,14 +328,15 @@ def shape_double(k1, k2, k3, table, alpha=1.0):
     three legs carries the velocity (W2 kernel); the other two are sigma
     legs (V kernel)."""
     kt = k1 + k2 + k3
+    xi, w_N2, w_N0 = _contour(table)
     e = [k1/kt, k2/kt, k3/kt]
     total = 0j
     for c in range(3):
-        prod = _Q_leg('W2', 2*_XI_NODES*e[c], table)
+        prod = _Q_leg('W2', 2*xi*e[c], table)
         for jgleg in range(3):
             if jgleg != c:
-                prod = prod * _Q_leg('V', 2*_XI_NODES*e[jgleg], table)
-        total += np.sum(_XI_WEIGHTS_N2 * prod)
+                prod = prod * _Q_leg('V', 2*xi*e[jgleg], table)
+        total += np.sum(w_N2 * prod)
     Nalpha = alpha / (4 * np.pi * table['lam']**2 * table['R']**1.5)
     return Nalpha * e[0] * e[1] * e[2] * total.real
 
@@ -332,11 +345,12 @@ def shape_triple(k1, k2, k3, table, mu_over_H=1.0):
     """(nsigma=3): the sigma^3 shape. All three legs carry sigma (V
     kernel); no sum over placements (the vertex is fully symmetric)."""
     kt = k1 + k2 + k3
+    xi, w_N2, w_N0 = _contour(table)
     e = [k1/kt, k2/kt, k3/kt]
-    Q1 = _Q_leg('V', 2*_XI_NODES*e[0], table)
-    Q2 = _Q_leg('V', 2*_XI_NODES*e[1], table)
-    Q3 = _Q_leg('V', 2*_XI_NODES*e[2], table)
-    total = np.sum(_XI_WEIGHTS_N2 * Q1 * Q2 * Q3)
+    Q1 = _Q_leg('V', 2*xi*e[0], table)
+    Q2 = _Q_leg('V', 2*xi*e[1], table)
+    Q3 = _Q_leg('V', 2*xi*e[2], table)
+    total = np.sum(w_N2 * Q1 * Q2 * Q3)
     Nmu = -6 * mu_over_H / (np.pi * table['lam']**3 * table['R']**1.5)
     return Nmu * e[0] * e[1] * e[2] * total.real
 
@@ -346,16 +360,17 @@ def shape_pidot_gradpi2(k1, k2, k3, table, b_over_H=1.0):
     c indexes which leg carries the velocity (W2 kernel); the other two are
     undifferentiated legs (P kernel). Uses the N=0 xi-measure."""
     kt = k1 + k2 + k3
+    xi, w_N2, w_N0 = _contour(table)
     e = [k1/kt, k2/kt, k3/kt]
     total = 0j
     for c in range(3):
         a_e, b_e = e[(c+1) % 3], e[(c+2) % 3]
         Fc = e[c] * (a_e**2 + b_e**2 - e[c]**2) / (2 * a_e * b_e)
-        prod = _Q_leg('W2', 2*_XI_NODES*e[c], table)
+        prod = _Q_leg('W2', 2*xi*e[c], table)
         for jgleg in range(3):
             if jgleg != c:
-                prod = prod * _Q_leg('P', 2*_XI_NODES*e[jgleg], table)
-        total += Fc * np.sum(_XI_WEIGHTS_N0 * prod)
+                prod = prod * _Q_leg('P', 2*xi*e[jgleg], table)
+        total += Fc * np.sum(w_N0 * prod)
     Nb = -1 / (32 * np.pi) * b_over_H / table['R']**1.5
     return Nb * total.real
 

@@ -1,17 +1,18 @@
 """Kernel table of FastShapes for unequal sound speeds, c_pi = c != 1, c_sigma = 1.
 
-With s = c(1+2u), u_sigma = (1-c)/(2c), and h_c, h_1 the solutions of the Heun spectral equation analytic at s = c
-and s = 1 (h_c(c) = h_1(1) = 1), continued along the real axis from above,
-    Omega_pi    = delta_+(u) + lam^2 c^2/(1-c^2) (1+u) Theta(u) h_c(s+i0),
-    Omega_sigma = 2 lam c^{5/2}/(1-c^2) (1+u) Theta(u-u_sigma) h_1(s+i0),
-    Im Omega_X = sinh(chi) Omega_Y,    (X, Y) = (pi, sigma) for c < 1, (sigma, pi) for c > 1,
-    omega_+ = (Re Omega_X + i cosh(chi) Omega_Y) / sqrt(cosh chi),    r_+ = int omega_+/(1+u),    R = cosh(chi) |r_+|^2.
-For c > 1 the table is in u' = c u + u_pi, u_pi = (c-1)/2, with Omega' = Omega (1+u')/(1+u'+u_pi) and
-    omega'_+ = (Omega'_sigma + i e^{-chi} Omega'_pi) / sqrt(cosh chi),    Omega'_sigma on a semicircle above u' = u_pi.
-Extra table keys: 'w' (int f du = sum w u f), 'omega_V' (sigma-leg weight), 'chi', 'c', 'v' = min(c, 1).
+In u with s = s0 (1+2u), s0 = min(c,1), S = max(c,1), the curvature and isocurvature weights are
+    Omega_pi = delta + lam^2 c^2/(1-c^2) (1+u_c) h_c(s),    Omega_sigma = 2 lam c^{5/2}/(1-c^2) (1+u_c) h_1(s),
+with s = c(1+2u_c), times (1+u)/(1+u+u_pi) for c > 1, and h_c, h_1 the solutions of the Heun spectral equation analytic at
+s = c, 1 (h = 1 there). With (X, Y) = (pi, sigma) for c < 1 and (sigma, pi) for c > 1, Im Omega_X(s+i0) = sinh(chi) Omega_Y,
+and the channel sum is taken in the weight,
+    rho = [s_c Omega_X(s-i0) + 2 Im r_+ Omega_Y] / sqrt(cosh chi),    s_c = e^chi r_+ + e^-chi r_+^*,    R = cosh(chi) |r_+|^2,
+tabulated on the rays u = -it (X) and u_Y - it (Y). The shapes are evaluated on the Schwinger contour [0, iY] u [iY, iY+inf)
+with the legs L_K(z) = e^{-iz} Q_K(2iz); on [0, iY] Im L_K is the canonical commutator, Im L_W0 = -(2c/s0) h(z), h the odd
+solution of the master equation with h = z + O(z^3).
+Extra table keys: 'rho', 'rho_V', 'w' (int f du = sum w u f), 'xi', 'w_N2', 'w_N0', 'n_rt', 'commutator', 'chi', 'c', 'v' = s0.
 """
 import numpy as np
-from numpy.polynomial import Polynomial, polynomial as Pn
+from numpy.polynomial import Polynomial, polynomial as Pn, chebyshev as Ch
 from scipy.integrate import solve_ivp
 import FastShapes as fs
 
@@ -51,100 +52,84 @@ def _transport(P, y, s_from, s_to):
     return solve_ivp(f, (0.0, 1.0), np.asarray(y, complex), method='DOP853', rtol=1e-12, atol=1e-16).y[:, -1]
 
 
-def _h_on_nodes(c, M2, lam, s):
-    """h_in(s), h_out(s) at the nodes s: the solutions analytic at min(c,1) and max(c,1), the first continued above."""
-    P = _polys(c, M2, lam)
-    r_in, r_out = min(c, 1.0), max(c, 1.0)
-    a_in, d_in = _taylor(c, M2, lam, r_in); a_out, d_out = _taylor(c, M2, lam, r_out)
-    t_in, t_out = 0.2 * d_in, 0.2 * d_out
-    arc = np.flatnonzero(s.imag > 0); arc = arc[np.argsort(-np.angle(s[arc] - r_out))]
-    rd = abs(s[arc[0]] - r_out) if len(arc) else 0.5 * min(r_out - r_in, 1.0)
-    hin, hout = np.zeros(len(s), complex), np.zeros(len(s), complex)
-    order = [i for i in np.argsort(s.real) if s[i].imag == 0]
-    sel = lambda lo, hi: [i for i in order if lo < s[i].real <= hi]
-
-    def march(y, s0, idx, h):
-        for i in idx:
-            y = _transport(P, y, s0, s[i]); s0 = s[i]; h[i] = y[0]
-        return y, s0
-
-    for i in sel(r_in, r_in + t_in):
-        hin[i] = _eval(a_in, d_in, s[i] - r_in)[0]
-    y, s0 = march(_eval(a_in, d_in, t_in), r_in + t_in, sel(r_in + t_in, r_out - rd), hin)
-    y = _transport(P, y, s0, r_out - rd)
-    march(y, r_out - rd, sel(r_out - rd, r_out), hin)
-    if len(arc):
-        y, s0 = march(y, r_out - rd, arc, hin)
-        y = _transport(P, y, s0, r_out + rd)
-    else:
-        phis = np.linspace(np.pi, 0.0, 33)
-        for phi0, phi1 in zip(phis[:-1], phis[1:]):
-            y = _transport(P, y, r_out + rd * np.exp(1j * phi0), r_out + rd * np.exp(1j * phi1))
-    march(y, r_out + rd, sel(r_out, r_out + rd)[::-1], hin)
-    march(y, r_out + rd, sel(r_out + rd, np.inf), hin)
-    for i in sel(r_out, r_out + t_out):
-        hout[i] = _eval(a_out, d_out, s[i] - r_out)[0]
-    march(_eval(a_out, d_out, t_out), r_out + t_out, sel(r_out + t_out, np.inf), hout)
-    return hin, hout
+def _h_ray(c, M2, lam, r, s):
+    """The solution analytic at s = r (h(r) = 1) at the nodes s of a ray leaving r, in order."""
+    P = _polys(c, M2, lam); a, dist = _taylor(c, M2, lam, r)
+    far = abs(s - r) > 0.2 * dist; h = np.zeros(len(s), complex)
+    h[~far] = [_eval(a, dist, si - r)[0] for si in s[~far]]
+    far = np.flatnonzero(far); s0 = r + 0.2 * dist * (s[far[0]] - r) / abs(s[far[0]] - r)
+    y = _eval(a, dist, s0 - r)
+    for i in far:
+        y = _transport(P, y, s0, s[i]); s0 = s[i]; h[i] = y[0]
+    return h
 
 
-def _grid(u_sigma):
-    """Nodes u and weights w (int f du = sum w u f) of FastShapes' log-u panel grid, graded towards u_sigma."""
-    edges = list(fs._T_EDGES)
-    ts = np.log(u_sigma)
-    if edges[0] < ts < edges[-1]:
-        extra = [ts] + [ts + sgn * fs._T_PANEL * 2.0**(-k) for k in range(18) for sgn in (-1, 1)]
-        edges = sorted(set(edges + [e for e in extra if edges[0] < e < edges[-1]]))
-    t, w = fs._panel_gauss_legendre(np.array(edges), fs._T_PER_PANEL)
-    return np.exp(t), w
+def _commutator(c, s0, meff2, M2, zmax, z0=0.3, N=60, pw=0.25, nc=18):
+    """Im L_K(z): h is the odd solution of the master equation (series below z0, DOP853 + Chebyshev above)."""
+    A, E, F, G = (1 + c**2) / s0**2, 2 * c**2 / s0**2, c**2 / s0**4, c**2 * (M2 - 2) / s0**2
+    a = np.zeros(N); a[0] = 1.0
+    for n in range(2, N, 2):
+        x = n + 1.0
+        a[n] = -((A*(x-2)*(x-3) + E*(x-2) + G) * a[n-2] + (F * a[n-4] if n >= 4 else 0.0)) / (x*(x-1)*(x*x - 3*x + meff2))
+    ex = np.arange(N) + 1.0; D = [a, a * ex, a * ex * (ex - 1), a * ex * (ex - 1) * (ex - 2)]
+    ser = lambda z, k: (D[k] * np.asarray(z)[..., None]**(ex - k)).sum(-1)
+    rhs = lambda z, y: [y[1], y[2], y[3], -(2*z*y[3] + (A*z*z + meff2 - 2)*y[2] + E*z*y[1] + (F*z*z + G)*y[0]) / (z*z)]
+    sol = solve_ivp(rhs, (z0, zmax), [ser(z0, k) for k in range(4)], method='DOP853', rtol=1e-13, atol=1e-300, dense_output=True)
+    edges = np.append(np.arange(z0, zmax, pw), zmax); mid, half = (edges[1:] + edges[:-1]) / 2, (edges[1:] - edges[:-1]) / 2
+    xk = np.cos(np.pi * (np.arange(nc) + 0.5) / nc)
+    vals = sol.sol((mid[:, None] + half[:, None] * xk).ravel())[:3].reshape(3, len(mid), nc)
+    coef = Ch.chebfit(xk, vals.transpose(2, 0, 1).reshape(nc, -1), nc - 1).reshape(nc, 3, len(mid))
+    k, q, v = 2 * c / s0, (c / s0)**2, s0
+
+    def commutator(kernel, z):
+        H = np.empty((3, len(z))); m = z >= z0
+        H[:, ~m] = [ser(z[~m], j) for j in range(3)]
+        p = np.minimum(np.searchsorted(edges, z[m], side='right') - 1, len(mid) - 1)
+        H[:, m] = np.einsum('ik,kji->ji', Ch.chebvander((z[m] - mid[p]) / half[p], nc - 1), coef[:, :, p])
+        if kernel == 'W2':
+            return k * H[2]
+        if kernel == 'V':
+            return k / 4 * (H[2] + q * H[0])
+        return -k * (H[0] - z * H[1]) / v
+    return commutator
 
 
-def _grid_arc(u_pi):
-    """Log-u grid with [u_pi/2, 3u_pi/2] replaced by a semicircle above u_pi (kind 1) and [u_pi, 3u_pi/2] (kind 2)."""
-    lo, hi = np.log(u_pi / 2), np.log(3 * u_pi / 2)
-    tl, wl = fs._panel_gauss_legendre(np.array([e for e in fs._T_EDGES if e < lo] + [lo]), fs._T_PER_PANEL)
-    tr, wr = fs._panel_gauss_legendre(np.array([hi] + [e for e in fs._T_EDGES if e > hi]), fs._T_PER_PANEL)
-    phi, wphi = fs._panel_gauss_legendre(np.linspace(0.0, np.pi, 5), fs._T_PER_PANEL)
-    z = u_pi + u_pi / 2 * np.exp(1j * phi)
-    x, wx = fs._panel_gauss_legendre(np.array([u_pi, 3 * u_pi / 2]), fs._T_PER_PANEL)
-    u = np.concatenate([np.exp(tl), np.exp(tr), z, x])
-    w = np.concatenate([wl, wr, -1j * u_pi / 2 * np.exp(1j * phi) * wphi / z, wx / x])
-    kind = np.concatenate([np.zeros(len(tl) + len(tr), int), np.ones(len(z), int), 2 * np.ones(len(x), int)])
-    return u, w, kind
-
-
-def build_kernel_table_c(meff_over_H, rho_over_H, c):
+def build_kernel_table_c(meff_over_H, rho_over_H, c, Y=10.0):
     """The FastShapes kernel table for curvature sound speed c != 1 (isocurvature sound speed 1)."""
     lam, c = float(rho_over_H), float(c)
     M2 = float(meff_over_H)**2 - lam**2
-    d, v = 1 - c**2, min(c, 1.0)
-    u_pi = (c / v - 1) / 2
-    A_pi, A_sig = lam**2 * c**2 / d, 2 * lam * c**2.5 / d
-    if c < 1:
-        u_sigma = (1 - c) / (2 * c)
-        u, w = _grid(u_sigma)
-        hin, hout = _h_on_nodes(c, M2, lam, c * (1 + 2 * u))
-        Om_in = A_pi * (1 + u) * hin
-        out = u > u_sigma
-        Om_out = np.where(out, A_sig * (1 + u) * hout.real, 0.0)
-        i0 = np.argmin(np.where(out, u, np.inf))
-        chi = np.arcsinh(Om_in.imag[i0] / Om_out[i0]); cosh_chi = np.cosh(chi)
-        omega = (Om_in.real + 1j * cosh_chi * Om_out) / np.sqrt(cosh_chi)
-        head_W = 1 / np.sqrt(cosh_chi)
-    else:
-        u, w, kind = _grid_arc(u_pi)
-        ub = (u - u_pi) / c
-        hin, hout = _h_on_nodes(c, M2, lam, 1 + 2 * u)
-        Om_sig = np.where(kind != 2, A_sig * (1 + ub) * hin, 0.0)
-        out = (kind != 1) & (u.real > u_pi)
-        Om_pi = np.where(out, A_pi * (1 + ub) * hout.real, 0.0)
-        i0 = np.argmin(np.where((kind == 0) & out, u.real, np.inf))
-        chi = np.arcsinh(Om_sig.imag[i0] / Om_pi[i0]); cosh_chi = np.cosh(chi)
-        omega = (Om_sig + 1j * np.exp(-chi) * Om_pi) / np.sqrt(cosh_chi) * (1 + u) / (1 + u + u_pi)
-        u, w = np.append(u, u_pi), np.append(w, 1 / u_pi)
-        omega = np.append(omega, 1j * np.exp(-chi) * (1 + u_pi) / np.sqrt(cosh_chi))
-        head_W = 0.0
-    r_plus = complex(np.sum(w * u * omega / (1 + u)) + head_W)
-    return dict(u=u, w=w, omega=omega, omega_V=omega * (1 - u_pi * (1 + u_pi) / (u * (1 + u))), head_W=complex(head_W),
-                head_V=0j, r_plus=r_plus, R=float(cosh_chi * abs(r_plus)**2), lam=lam,
-                nu_eff=np.sqrt(2.25 - meff_over_H**2 + 0j), chi=float(chi), c=c, v=v)
+    s0, S = min(c, 1.0), max(c, 1.0)
+    u_pi, u_Y = (c / s0 - 1) / 2, (S / s0 - 1) / 2
+    A_pi, A_sig = lam**2 * c**2 / (1 - c**2), 2 * lam * c**2.5 / (1 - c**2)
+    A_X, A_Y = (A_pi, A_sig) if c < 1 else (A_sig, A_pi)
+    # chi: h_X continued below the upper cone to s* = S + dist/5, where h_Y is its Taylor series
+    aY, dY = _taylor(c, M2, lam, S); s_star = S + 0.2 * dY
+    hX = _h_ray(c, M2, lam, s0, np.array([s0 - 0.5j * dY, S - 0.5j * dY, s_star]))[-1]
+    chi = np.arcsinh(-A_X * hX.imag / (A_Y * _eval(aY, dY, 0.2 * dY)[0].real)); cosh_chi = np.cosh(chi)
+    # the rays u = -it and u_Y - it, t = e^{t-nodes of FastShapes} <= e^26
+    t, w = fs._panel_gauss_legendre(fs._T_EDGES[fs._T_EDGES <= 26], fs._T_PER_PANEL); t = np.exp(t)
+    uX, uY = -1j * t, u_Y - 1j * t
+    ub = lambda u: (u - u_pi) / c if c > 1 else u
+    f = lambda u: (1 + u) / (1 + u + u_pi) if c > 1 else 1.0
+    Om_X = A_X * (1 + ub(uX)) * f(uX) * _h_ray(c, M2, lam, s0, s0 * (1 + 2 * uX))
+    Om_Y = A_Y * (1 + ub(uY)) * f(uY) * _h_ray(c, M2, lam, S, s0 * (1 + 2 * uY))
+    u, w = np.concatenate([uX, uY]), np.concatenate([w, w * (uY - u_Y) / uY])
+    r_plus = np.sum(w * u * np.concatenate([Om_X, 1j * np.exp(chi) * Om_Y]) / (1 + u))
+    d_X, d_Y = (1.0, 0.0) if c < 1 else (0.0, 1 + u_pi)                       # the curvature delta, on X or on Y
+    r_plus = (r_plus + (d_X + 1j * np.exp(chi) * d_Y) / (1 + u_pi)) / np.sqrt(cosh_chi)
+    s_c = np.exp(chi) * r_plus + np.exp(-chi) * np.conj(r_plus)
+    rho = np.concatenate([s_c * Om_X, 2 * r_plus.imag * Om_Y]) / np.sqrt(cosh_chi)
+    if c > 1:                                                                  # delta at u_pi as a node: w u = 1
+        u, w, rho = np.append(u, u_pi), np.append(w, 1 / u_pi), np.append(rho, 2 * r_plus.imag * d_Y / np.sqrt(cosh_chi))
+    # the contour: xi = iy (log panels to y = 0.3, then linear panels resolving the faster light cone), xi = iY + x
+    gl = lambda e: fs._panel_gauss_legendre(np.asarray(e, float), fs._XI_T_PER_PANEL)
+    ya, wa = gl(np.append(np.arange(-15.0, np.log(0.3), 1.6), np.log(0.3))); ya = np.exp(ya)
+    yb, wb = gl(np.linspace(0.3, Y, int(np.ceil((Y - 0.3) * max(c, 1 / c) / 8)) + 1))
+    xa, wxa = gl([0.0, 0.2]); xb, wxb = gl(np.append(np.arange(np.log(0.2), np.log(200.0), 1.6), np.log(200.0))); xb = np.exp(xb)
+    xi = np.concatenate([1j * ya, 1j * yb, 1j * Y + xa, 1j * Y + xb])
+    dxi = np.concatenate([1j * ya * wa, 1j * wb, wxa, xb * wxb])
+    return dict(u=u, w=w, rho=rho, rho_V=rho * (1 - u_pi * (1 + u_pi) / (u * (1 + u))), head_W=s_c * d_X / np.sqrt(cosh_chi),
+                head_V=0j, r_plus=complex(r_plus), R=float(cosh_chi * abs(r_plus)**2), lam=lam,
+                nu_eff=np.sqrt(2.25 - meff_over_H**2 + 0j), chi=float(chi), c=c, v=s0,
+                xi=xi, w_N2=dxi * xi**2, w_N0=dxi, n_rt=len(ya) + len(yb),
+                commutator=_commutator(c, s0, float(meff_over_H)**2, M2, Y / 2 + 0.5))
