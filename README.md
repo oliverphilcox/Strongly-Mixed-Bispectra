@@ -33,11 +33,12 @@ The minimal EFT of an inflationary Goldstone $\pi$ coupled to a massive isocurva
 | $\dot\pi_c\sigma^2$ | $\lambda_2$ | `shape_double` |
 | $\sigma^3$ | $\lambda_3$ | `shape_triple` |
 
-For $c_s\neq1$ the same EFT generates one more cubic interaction, which vanishes at unit sound speed:
+For $c_s\neq1$, or an isocurvature sound speed $c_\sigma\neq1$, the same EFT generates one more cubic interaction each, which vanishes at unit sound speed:
 
 | Interaction | Coupling | `FastShapes.py` function |
 |---|---|---|
 | $\dot\pi_c(\partial_i\pi_c)^2/a^2$ | $b$ | `shape_pidot_gradpi2` |
+| $\dot\sigma\,\partial_i\pi_c\partial_i\sigma/a^2$ | $\beta$ | `shape_sigmadot_dpi_dsigma` |
 
 This is the convention used consistently by `Theory.py` (the `CosmoFlow` Lagrangian) and by `FastShapes.py`'s own docstring, and is what `FastShapes.ipynb` cross-checks one against the other.
 

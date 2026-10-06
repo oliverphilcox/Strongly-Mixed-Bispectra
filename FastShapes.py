@@ -8,18 +8,20 @@ order" nsigma = number of sigma legs at the single cubic vertex:
     nsigma=1  pidot_c^2 sigma                  (single, "||",  coupling lambda11)
     nsigma=1  (d_i pi_c)^2 sigma               (single, "T",   coupling lambda12)
     nsigma=2  pidot_c sigma^2                  (double,        coupling lambda2)
+    nsigma=2  sigmadot d_i pi_c d_i sigma      (double,        coupling beta)
     nsigma=3  sigma^3                          (triple,        coupling lambda3)
 
 
 -----------------------------------------------------------------------
 Method summary
 -----------------------------------------------------------------------
-Every leg of the single cubic vertex is one of three types, each reducing
+Every leg of the single cubic vertex is one of four types, each reducing
 to a 1D kernel built from the SAME weight function omega_a(u):
 
     velocity leg   pidot_c            -> W_2^a(beta) = int omega_a(u)(1+2u)^2/(1+u) e^{-beta u} du
     undiff. leg    pi_c (gradient sq) -> P^a(beta)   = W_0^a(beta) + (beta/2) W_1^a(beta)
     sigma leg      sigma              -> V^a(beta)   = int omega_a(u) u e^{-beta u} du
+    sigma vel. leg sigmadot           -> U^a(beta)   = 2 V^a(beta) - (beta/2) int omega_a(u) u (1+2u) e^{-beta u} du
 
 with W_n^a(beta) = int omega_a(u)(1+2u)^n/(1+u) e^{-beta u} for
 n=0,1,2. All four kernels (W0, W1, W2, V) are computed here from a SINGLE
@@ -215,22 +217,26 @@ def _Wn_plus(n, beta, table):
     return out.reshape(beta.shape)
 
 
-def _V_plus(beta, table):
-    """V_{+1}(beta) = int omega_+1(u) u e^{-beta u}."""
+def _V_plus(beta, table, n=0):
+    """V_n^{+1}(beta) = int omega_+1(u) u (1+2u)^n e^{-beta u}, n=0,1."""
     beta = np.atleast_1d(np.asarray(beta))
     flat = beta.reshape(-1)
     u = table['u']
-    integrand = table.get('rho_V', table.get('omega')) * u * table.get('w', _T_WEIGHTS) * u
+    integrand = table.get('rho_V', table.get('omega')) * u * (1 + 2*u)**n * table.get('w', _T_WEIGHTS) * u
     out = (np.exp(-np.outer(flat, u)) @ integrand) + table['head_V']
     return out.reshape(beta.shape)
 
 
 def _K_plus(kernel, beta, table):
-    """Dispatch to the a=+1 evaluation of one of the three leg-kernel types."""
+    """Dispatch to the a=+1 evaluation of one of the four leg-kernel types."""
     if kernel == 'W2':
         return _Wn_plus(2, beta, table)
     if kernel == 'V':
         return _V_plus(beta, table)
+    if kernel == 'U':
+        # U^a(beta) = 2 V_0^a(beta) - (beta/2) V_1^a(beta), from sigmadot = -H y d_y sigma.
+        beta_arr = np.atleast_1d(np.asarray(beta))
+        return 2 * _V_plus(beta_arr, table) - (beta_arr/2) * _V_plus(beta_arr, table, 1)
     if kernel == 'P':
         # P^a(beta) = W0^a(beta) + (beta/2) W1^a(beta).
         beta_arr = np.atleast_1d(np.asarray(beta))
@@ -241,7 +247,7 @@ def _K_plus(kernel, beta, table):
 def _Q_leg(kernel, beta, table):
     """
     Sum over the two oscillator channels a=+-1 for ONE leg at fixed beta,
-    for any of the three leg-kernel types:
+    for any of the four leg-kernel types:
 
         Q_K(beta) = sum_{a=+-1} exp(a*pi*lambda/2) r_a K^{-a}(beta)
 
@@ -375,9 +381,27 @@ def shape_pidot_gradpi2(k1, k2, k3, table, b_over_H=1.0):
     return Nb * total.real
 
 
+def shape_sigmadot_dpi_dsigma(k1, k2, k3, table, beta_over_H=1.0):
+    """(nsigma=2): the sigmadot d_i pi_c d_i sigma / a^2 shape, coupling beta set to 1, generated with a coefficient
+    fixed by c_sigma (zero at c_sigma = 1) by (g^{0mu} d_mu sigma)^2; evaluated in the frame where sigma has unit speed
+    (c = c_pi/c_sigma). (i, j, l) runs over the six assignments of the undifferentiated pi_c leg (P kernel), the
+    d_i sigma leg (V) and the sigmadot leg (U). Uses the N=2 xi-measure."""
+    kt = k1 + k2 + k3
+    xi, w_N2, w_N0 = _contour(table)
+    e = [k1/kt, k2/kt, k3/kt]
+    total = 0j
+    for i, j, l in ((0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0)):
+        Gij = (e[l]**2 - e[i]**2 - e[j]**2) / 2
+        prod = _Q_leg('P', 2*xi*e[i], table) * _Q_leg('V', 2*xi*e[j], table) * _Q_leg('U', 2*xi*e[l], table)
+        total += Gij / e[i]**2 * np.sum(w_N2 * prod)
+    # the gradient pair carries 1/v^2 (v = s0 for c != 1), of which the single P leg supplies 1/v
+    Nbeta = -beta_over_H / (4 * np.pi * table['lam']**2 * table['R']**1.5 * table.get('v', 1.0))
+    return Nbeta * e[0] * e[1] * e[2] * total.real
+
+
 _SHAPE_FUNCS = dict(pidot3=shape_pidot3, single_parallel=shape_single_parallel,
                      single_perp=shape_single_perp, double=shape_double, triple=shape_triple,
-                     pidot_gradpi2=shape_pidot_gradpi2)
+                     pidot_gradpi2=shape_pidot_gradpi2, sigmadot_dpi_dsigma=shape_sigmadot_dpi_dsigma)
 
 
 # ============================================================================

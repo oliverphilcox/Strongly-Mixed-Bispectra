@@ -77,19 +77,21 @@ def _commutator(c, s0, meff2, M2, zmax, z0=0.3, N=60, pw=0.25, nc=18):
     sol = solve_ivp(rhs, (z0, zmax), [ser(z0, k) for k in range(4)], method='DOP853', rtol=1e-13, atol=1e-300, dense_output=True)
     edges = np.append(np.arange(z0, zmax, pw), zmax); mid, half = (edges[1:] + edges[:-1]) / 2, (edges[1:] - edges[:-1]) / 2
     xk = np.cos(np.pi * (np.arange(nc) + 0.5) / nc)
-    vals = sol.sol((mid[:, None] + half[:, None] * xk).ravel())[:3].reshape(3, len(mid), nc)
-    coef = Ch.chebfit(xk, vals.transpose(2, 0, 1).reshape(nc, -1), nc - 1).reshape(nc, 3, len(mid))
+    vals = sol.sol((mid[:, None] + half[:, None] * xk).ravel()).reshape(4, len(mid), nc)
+    coef = Ch.chebfit(xk, vals.transpose(2, 0, 1).reshape(nc, -1), nc - 1).reshape(nc, 4, len(mid))
     k, q, v = 2 * c / s0, (c / s0)**2, s0
 
     def commutator(kernel, z):
-        H = np.empty((3, len(z))); m = z >= z0
-        H[:, ~m] = [ser(z[~m], j) for j in range(3)]
+        H = np.empty((4, len(z))); m = z >= z0
+        H[:, ~m] = [ser(z[~m], j) for j in range(4)]
         p = np.minimum(np.searchsorted(edges, z[m], side='right') - 1, len(mid) - 1)
         H[:, m] = np.einsum('ik,kji->ji', Ch.chebvander((z[m] - mid[p]) / half[p], nc - 1), coef[:, :, p])
         if kernel == 'W2':
             return k * H[2]
         if kernel == 'V':
             return k / 4 * (H[2] + q * H[0])
+        if kernel == 'U':
+            return k / 4 * (2 * (H[2] + q * H[0]) + z * (H[3] + q * H[1]))
         return -k * (H[0] - z * H[1]) / v
     return commutator
 
