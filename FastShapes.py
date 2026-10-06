@@ -109,7 +109,7 @@ def _panel_gauss_legendre(edges, n_per_panel):
     return np.concatenate(nodes), np.concatenate(weights)
 
 
-def set_grids(t_min=-30.0, t_max=76.0, t_panel=2.0, xi_t_min=-64.0, xi_t_max=4.4, xi_t_panel=1.6, n_per_panel=14):
+def set_grids(t_min=-30.0, t_max=76.0, t_panel=1.5, xi_t_min=-64.0, xi_t_max=4.4, xi_t_panel=1.6, n_per_panel=14):
     global _T_MIN, _T_MAX, _T_PANEL, _T_PER_PANEL, _T_EDGES, _T_NODES, _T_WEIGHTS, _U_NODES
     global _XI_T_MIN, _XI_T_MAX, _XI_T_PANEL, _XI_T_PER_PANEL, _XI_T_EDGES, _XI_NODES, _XI_WEIGHTS_N2, _XI_WEIGHTS_N0
     # u = exp(t) grid for the leg-kernel integral.
