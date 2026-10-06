@@ -22,6 +22,7 @@ class theory:
         self.a_interp = interpolated[10]
         self.scale_interp = interpolated[11]
         self.dscale_interp = interpolated[12]
+        self.beta_f = interpolated[13]
 
         N = self.N
 
@@ -35,6 +36,7 @@ class theory:
         self.lambda12 = self.lambda12_f(N)
         self.lambda2 = self.lambda2_f(N)
         self.lambda3 = self.lambda3_f(N)
+        self.beta = self.beta_f(N)
 
         self.dH = self.dH_interp(N)
         self.a = self.a_interp(N)
@@ -101,6 +103,8 @@ class theory:
         k1k2 = (k3**2 - k1**2 - k2**2)/2
         Babc[1, 1, 0] += -self.lambda2 + 2*self.lambda11 * self.rho - 1*self.kappa1*self.rho**2
         Babc[0, 0, 0] += self.kappa2*k1k2/self.a**2
+        Babc[1, 0, 1] += self.beta*k1k2/self.a**2
+        Babc[0, 1, 1] += self.beta*k1k2/self.a**2
         return Babc
 
     def C_abc(self, k1, k2, k3):

@@ -7,7 +7,7 @@ class parameters:
 
     def __init__(self, N_load, H_load, m2_load,
                  rho_load, kappa1_load, kappa2_load, lambda11_load, lambda12_load,
-                 lambda2_load, lambda3_load):
+                 lambda2_load, lambda3_load, beta_load=None):
 
         self.N_load = N_load
 
@@ -21,6 +21,7 @@ class parameters:
         self.lambda12_load = lambda12_load
         self.lambda2_load = lambda2_load
         self.lambda3_load = lambda3_load
+        self.beta_load = np.zeros_like(N_load) if beta_load is None else beta_load
 
         self.dH_load = np.gradient(H_load, N_load)
 
@@ -61,6 +62,9 @@ class parameters:
     def lambda3_f(self, N):
         return np.interp(N, self.N_load, self.lambda3_load)
 
+    def beta_f(self, N):
+        return np.interp(N, self.N_load, self.beta_load)
+
     def dH_f(self, N):
         return np.interp(N, self.N_load, self.dH_load)
 
@@ -78,7 +82,7 @@ class parameters:
     def output(self):
         return [self.H_f, self.m2_f, self.rho_f, self.kappa1_f, self.kappa2_f,
                 self.lambda11_f, self.lambda12_f,
-                self.lambda2_f, self.lambda3_f, self.dH_f, self.a_f, self.scale_f, self.dscale_f]
+                self.lambda2_f, self.lambda3_f, self.dH_f, self.a_f, self.scale_f, self.dscale_f, self.beta_f]
 
 
 
