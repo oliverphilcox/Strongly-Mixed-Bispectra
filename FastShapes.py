@@ -207,13 +207,26 @@ def build_kernel_table(meff_over_H, rho_over_H, cache_dir=None):
 #    factorization ("Q_leg"), shared by all shapes
 # ============================================================================
 
+_EXP = {}
+
+
+def _exp_outer(flat, u):
+    """exp(-outer(flat, u)), cached across the kernels and shapes of one triangle."""
+    key = (flat.tobytes(), u.tobytes())
+    if key not in _EXP:
+        if len(_EXP) >= 8:
+            del _EXP[next(iter(_EXP))]
+        _EXP[key] = np.exp(-np.outer(flat, u))
+    return _EXP[key]
+
+
 def _Wn_plus(n, beta, table):
     """W_n^{+1}(beta) = int omega_+1(u) (1+2u)^n/(1+u) e^{-beta u}, n=0,1,2."""
     beta = np.atleast_1d(np.asarray(beta))
     flat = beta.reshape(-1)
     u = table['u']
     integrand = table.get('rho', table.get('omega')) * (1 + 2*u)**n / (1 + u) * table.get('w', _T_WEIGHTS) * u
-    out = (np.exp(-np.outer(flat, u)) @ integrand) + table['head_W']
+    out = (_exp_outer(flat, u) @ integrand) + table['head_W']
     return out.reshape(beta.shape)
 
 
@@ -223,7 +236,7 @@ def _V_plus(beta, table, n=0):
     flat = beta.reshape(-1)
     u = table['u']
     integrand = table.get('rho_V', table.get('omega')) * u * (1 + 2*u)**n * table.get('w', _T_WEIGHTS) * u
-    out = (np.exp(-np.outer(flat, u)) @ integrand) + table['head_V']
+    out = (_exp_outer(flat, u) @ integrand) + table['head_V']
     return out.reshape(beta.shape)
 
 
