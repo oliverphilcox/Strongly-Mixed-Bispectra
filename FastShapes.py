@@ -9,6 +9,7 @@ order" nsigma = number of sigma legs at the single cubic vertex:
     nsigma=1  (d_i pi_c)^2 sigma               (single, "T",   coupling lambda12)
     nsigma=2  pidot_c sigma^2                  (double,        coupling lambda2)
     nsigma=2  sigmadot d_i pi_c d_i sigma      (double,        coupling beta)
+    nsigma=2  pidot_c sigmadot^2               (double,        coupling gamma)
     nsigma=3  sigma^3                          (triple,        coupling lambda3)
 
 
@@ -412,9 +413,28 @@ def shape_sigmadot_dpi_dsigma(k1, k2, k3, table, beta_over_H=1.0):
     return Nbeta * e[0] * e[1] * e[2] * total.real
 
 
+def shape_pidot_sigmadot2(k1, k2, k3, table, gamma_over_H=1.0):
+    """(nsigma=2): the pidot_c sigmadot^2 shape. c indexes which of the
+    three legs carries the velocity (W2 kernel); the other two are sigmadot
+    legs (U kernel)."""
+    kt = k1 + k2 + k3
+    xi, w_N2, w_N0 = _contour(table)
+    e = [k1/kt, k2/kt, k3/kt]
+    total = 0j
+    for c in range(3):
+        prod = _Q_leg('W2', 2*xi*e[c], table)
+        for jgleg in range(3):
+            if jgleg != c:
+                prod = prod * _Q_leg('U', 2*xi*e[jgleg], table)
+        total += np.sum(w_N2 * prod)
+    Ngamma = gamma_over_H / (4 * np.pi * table['lam']**2 * table['R']**1.5)
+    return Ngamma * e[0] * e[1] * e[2] * total.real
+
+
 _SHAPE_FUNCS = dict(pidot3=shape_pidot3, single_parallel=shape_single_parallel,
                      single_perp=shape_single_perp, double=shape_double, triple=shape_triple,
-                     pidot_gradpi2=shape_pidot_gradpi2, sigmadot_dpi_dsigma=shape_sigmadot_dpi_dsigma)
+                     pidot_gradpi2=shape_pidot_gradpi2, sigmadot_dpi_dsigma=shape_sigmadot_dpi_dsigma,
+                     pidot_sigmadot2=shape_pidot_sigmadot2)
 
 
 # ============================================================================

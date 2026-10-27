@@ -23,6 +23,7 @@ class theory:
         self.scale_interp = interpolated[11]
         self.dscale_interp = interpolated[12]
         self.beta_f = interpolated[13]
+        self.gamma_f = interpolated[14]
 
         N = self.N
 
@@ -37,6 +38,7 @@ class theory:
         self.lambda2 = self.lambda2_f(N)
         self.lambda3 = self.lambda3_f(N)
         self.beta = self.beta_f(N)
+        self.gamma = self.gamma_f(N)
 
         self.dH = self.dH_interp(N)
         self.a = self.a_interp(N)
@@ -111,12 +113,16 @@ class theory:
     	Nfield = self.Nfield
     	Cabc = np.zeros((Nfield, Nfield, Nfield))
     	Cabc[0, 0, 1] += -self.lambda11 + 1*self.kappa1*self.rho
+    	Cabc[1, 1, 1] += self.gamma*self.rho
     	return Cabc
 
     def D_abc(self, k1, k2, k3):
         Nfield = self.Nfield
         Dabc = np.zeros((Nfield, Nfield, Nfield))
         Dabc[0, 0, 0] += - self.kappa1/3
+        Dabc[0, 1, 1] += - self.gamma/3
+        Dabc[1, 0, 1] += - self.gamma/3
+        Dabc[1, 1, 0] += - self.gamma/3
         return Dabc
 
 
