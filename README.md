@@ -15,7 +15,7 @@ This repository computes the tree-level bispectrum of every cubic self- and cros
 | File | What it does |
 |---|---|
 | `FastShapes.py` | **Core library.** Exact, semi-analytical bispectrum shapes for all cubic interactions, and their cosine correlation with the equilateral template, as a function of `(m_eff/H, ρ/H)`. This is the main deliverable of the paper's method — see "Method" below. |
-| `FastShapes_c.py` | The kernel table for a curvature sound speed $c_s\neq1$ (isocurvature sound speed 1), built from the two solutions of a Heun spectral equation. Every shape function of `FastShapes.py` accepts it unchanged. |
+| `FastShapes_c.py` | The kernel table on the real-time contour, for any curvature sound speed $c_s$ (isocurvature sound speed 1) and any $m_{\rm eff}$, including light fields $m_{\rm eff}<3H/2$ for which the Wick-rotated integral of `FastShapes.py` does not converge; the weights are the two Heun solutions for $c_s\neq1$ and the closed form of `FastShapes.py` at $c_s=1$. Every shape function of `FastShapes.py` accepts it unchanged. |
 | `FastShapes.ipynb` | Tutorial notebook: reproduces the letter's Figure 1, computes full 3D shapes, cross-checks against `CosmoFlow`, and scans the cosine correlation across parameter space. Start here. |
 | `Solver.py`, `Theory.py`, `Parameters.py` | `CosmoFlow`: an independent numerical solver that integrates the same in-in problem as a system of ODEs in time, without assuming any hierarchy between ρ and H. Used only as a cross-check — orders of magnitude slower than `FastShapes.py`, and not intended for large parameter scans. |
 | `generate_planck_grids.py` | Production script: computes the full shape (and cosine) on a `(μ_eff, lambda)` grid, for all 5 interactions, and writes the public data release. Resumable/checkpointed. |
@@ -99,13 +99,15 @@ cos_grid = scan_cosine_grid_triple(mu_eff_grid, lam_grid, cache_dir='kernel_cach
 
 `cache_dir` matters here: it caches the expensive per-point kernel tabulation to disk, so repeated or resumed scans don't redo work already done — always set it for anything beyond a quick test.
 
-### 4. Unequal sound speeds
+### 4. Unequal sound speeds and light fields
 
 ```python
 from FastShapes import shape_pidot3
 from FastShapes_c import build_kernel_table_c
 
-# c_pi = 0.5, c_sigma = 1; the table is used exactly like the one from build_kernel_table
+# c_pi = 0.5, c_sigma = 1; the table is used exactly like the one from build_kernel_table.
+# The same call with c=1, or with meff_over_H < 1.5 (any c), evaluates the shapes on the real-time contour,
+# which converges for every m_eff > 0; the late-time limit is taken (N_end -> infinity).
 table = build_kernel_table_c(meff_over_H=3.5, rho_over_H=3.16, c=0.5)
 
 S = shape_pidot3(k1=1.0, k2=0.8, k3=0.6, table=table)
