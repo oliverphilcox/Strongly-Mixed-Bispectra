@@ -95,7 +95,7 @@ def _row_worker(args):
 
 
 def generate(n_grid=50, n_tri1=30, n_tri2=30, x1_min=1e-3,
-             lam_range=(0.05, 4.0), mu_range=(0.05, 4.0),
+             lam_range=(0.05, 4.0), mu_range=(0.05, 4.0), n_mu=None,
              out_dir='.', interactions=None, cache_dir='kernel_cache',
              n_jobs=6, checkpoint_every=1):
     """
@@ -104,7 +104,7 @@ def generate(n_grid=50, n_tri1=30, n_tri2=30, x1_min=1e-3,
     Parameters
     ----------
     n_grid : int
-        Resolution of the (lam, mu) parameter grid (n_grid x n_grid).
+        Resolution of the (lam, mu) parameter grid (n_grid x n_grid, or n_grid x n_mu if n_mu is given).
     n_tri1, n_tri2, x1_min : int, int, float
         Passed to make_triangle_grid -- resolution of the triangle grid the
         shape is evaluated on. n_tri1*n_tri2 is the number of triangles.
@@ -130,8 +130,9 @@ def generate(n_grid=50, n_tri1=30, n_tri2=30, x1_min=1e-3,
     out_dir.mkdir(parents=True, exist_ok=True)
     cache_path = out_dir / cache_dir
 
+    n_mu = n_grid if n_mu is None else n_mu
     lam_grid = np.round(np.linspace(*lam_range, n_grid), 6)
-    mu_grid = np.round(np.linspace(*mu_range, n_grid), 6)
+    mu_grid = np.round(np.linspace(*mu_range, n_mu), 6)
     k1s, k2s, k3s = ps.make_triangle_grid(n1=n_tri1, n2=n_tri2, x1_min=x1_min)
     n_tri = len(k1s)
 
@@ -141,18 +142,18 @@ def generate(n_grid=50, n_tri1=30, n_tri2=30, x1_min=1e-3,
             raise ValueError(f"unknown interaction {name!r}; choose from {list(INTERACTIONS)}")
 
     # ---- load or initialize checkpoints (one per interaction) ----
-    paths = {name: out_dir / f"shapes_{n_grid}x{n_grid}_{name}.npz" for name in names}
+    paths = {name: out_dir / f"shapes_{n_grid}x{n_mu}_{name}.npz" for name in names}
     state = {}
     for name in names:
         if paths[name].exists():
             d = np.load(paths[name])
             state[name] = dict(shape=d['shape'].copy(), cos=d['cos'].copy(), seq=d['seq'].copy())
             print(f"[{name}] resuming from existing checkpoint "
-                  f"({np.isfinite(d['seq']).sum()}/{n_grid*n_grid} points already done)")
+                  f"({np.isfinite(d['seq']).sum()}/{n_grid*n_mu} points already done)")
         else:
-            state[name] = dict(shape=np.full((n_grid, n_grid, n_tri), np.nan),
-                                cos=np.full((n_grid, n_grid), np.nan),
-                                seq=np.full((n_grid, n_grid), np.nan))
+            state[name] = dict(shape=np.full((n_grid, n_mu, n_tri), np.nan),
+                                cos=np.full((n_grid, n_mu), np.nan),
+                                seq=np.full((n_grid, n_mu), np.nan))
 
     def save(name):
         np.savez(paths[name], lam=lam_grid, mu=mu_grid, k1=k1s, k2=k2s, k3=k3s,
