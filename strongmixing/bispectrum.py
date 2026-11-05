@@ -21,12 +21,12 @@ ETA_MAX = 200.0
 
 VERTICES = {
     'pidot3': (('pidot', 'pidot', 'pidot'), False),
-    'single_parallel': (('sigma', 'pidot', 'pidot'), False),
-    'double': (('pidot', 'sigma', 'sigma'), False),
+    'sigma_pidot2': (('sigma', 'pidot', 'pidot'), False),
+    'pidot_sigma2': (('pidot', 'sigma', 'sigma'), False),
     'pidot_sigmadot2': (('pidot', 'sigmadot', 'sigmadot'), False),
-    'triple': (('sigma', 'sigma', 'sigma'), False),
-    'pidot_gradpi2': (('pidot', 'pi', 'pi'), True),
-    'single_perp': (('sigma', 'pi', 'pi'), True),
+    'sigma3': (('sigma', 'sigma', 'sigma'), False),
+    'pidot_dpi2': (('pidot', 'pi', 'pi'), True),
+    'sigma_dpi2': (('sigma', 'pi', 'pi'), True),
     'sigmadot_dpi_dsigma': (('sigmadot', 'pi', 'sigma'), True),
 }
 
