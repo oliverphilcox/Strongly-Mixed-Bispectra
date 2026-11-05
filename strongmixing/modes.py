@@ -29,13 +29,11 @@ def gauss_legendre(edges, n=NODES_PER_PANEL):
 
 
 class Modes:
-    """Mode functions at sound-speed ratio c_s, mixing rho and effective mass m_eff (m_eff^2 = m^2 + rho^2 > 0).
+    """Mode functions at sound-speed ratio c_s, mixing rho and effective mass m_eff, with m_eff^2 = m^2 + rho^2 > 0.
 
-    The conjugate modes are integrals along the rays s = s_alpha - it from the light cones s = c_s and s = 1:
+    Along the conjugate rays s = s_alpha - it from the light cones s = c_s and s = 1,
 
-        2 k^3 G^F(x) = d e^{-i c_s x} + sum_alpha int dt w_alpha(s) e^{-isx},
-
-    with G^F = (H^2 / 2k^3) sum_alpha pi_alpha(0) F_alpha^*(x).
+        sum_alpha pi_alpha(0) F_alpha^*(x) = plane_wave e^{-i c_s x} + sum_alpha int dt w_alpha(s) e^{-isx}.
     """
 
     def __init__(self, c_s, rho, m_eff):
@@ -47,7 +45,7 @@ class Modes:
         self.nu_eff = np.sqrt(2.25 - self.m_eff**2 + 0j)
         self.s0 = min(self.c_s, 1.0)
 
-        # Ray nodes in t
+        # Set up nodes along the rays
         log_t, w_log = gauss_legendre(LOG_T_EDGES)
         self.t = 2 * self.s0 * np.exp(log_t)
         self.dt = w_log * self.t
@@ -60,8 +58,6 @@ class Modes:
         else:
             self._unequal_speeds()
         self.R = self.c_s**3 * np.sum(np.abs(self.pi0)**2)
-
-        self._commutator()
 
     def _heun(self):
         """Coefficients of p2 g'' + p1 g' + p0 g = 0."""
@@ -143,20 +139,21 @@ class Modes:
         """g_pi from s = c_s and g_sigma from s = 1."""
 
         c = self.c_s
-        a1 = self.rho**2 / (2 * np.sqrt(c) * (1 - c**2))
-        b2 = self.rho / (1 - c**2)
+        A1 = 1j * self.rho**2 / (2 * np.sqrt(c) * (1 - c**2))
+        B2 = -1j * self.rho / (1 - c**2)
         s_pi = c - 1j * self.t
         s_sigma = 1 - 1j * self.t
         g_pi = self._ray(c, s_pi)
         g_sigma = self._ray(1.0, s_sigma)
 
         # Compute late-time amplitudes
-        pi1 = 1j / c**1.5 - a1 * np.conj(self._late_time(s_pi, g_pi))
-        pi2 = b2 * np.conj(self._late_time(s_sigma, g_sigma))
+        pi1 = 1j / c**1.5 + 1j * A1 * np.conj(self._late_time(s_pi, g_pi))
+        pi2 = 1j * B2 * np.conj(self._late_time(s_sigma, g_sigma))
         self.pi0 = np.array([pi1, pi2])
 
-        self.rays = [(s_pi, -pi1 * a1 * g_pi), (s_sigma, pi2 * b2 * g_sigma)]
-        self.d = -1j * pi1 / c**1.5
+        # Compute weights on the conjugate rays
+        self.rays = [(s_pi, pi1 * np.conj(1j * A1) * g_pi), (s_sigma, pi2 * np.conj(1j * B2) * g_sigma)]
+        self.plane_wave = pi1 * np.conj(1j / c**1.5)
         self.heads = []
 
     def _equal_speeds(self):
@@ -180,37 +177,40 @@ class Modes:
                 den = mp.sqrt(mp.pi) * mp.gamma(mp.mpf('0.75') - nu / 2 + p[a]) * mp.gamma(mp.mpf('0.75') + nu / 2 + p[a])
                 return 1j / mp.sqrt(2) * mp.exp(-1j * mp.pi * p[a] / 2) * 2**p[a] * num / den
 
-            pi_p = pi_late(+1)
-            pi_m = pi_late(-1)
-            coef = {-1: -pi_p * mp.exp(mp.pi * self.rho / 4) / (mp.sqrt(2) * mp.gamma(p[-1])),
-                    +1: -pi_m * mp.exp(-mp.pi * self.rho / 4) / (mp.sqrt(2) * mp.gamma(p[+1]))}
-            s_ray = 1 - 1j * self.t
-            w = np.array([complex(coef[-1] * g(-1, mp.mpc(si.real, si.imag)) + coef[+1] * g(+1, mp.mpc(si.real, si.imag)))
-                          for si in s_ray])
-            self.heads = [(complex(coef[a]), complex(p[a])) for a in (-1, +1)]
+            # Compute late-time amplitudes
+            C1 = 1j * mp.exp(-1j * mp.pi * p[+1] / 2) / (mp.sqrt(2) * mp.gamma(p[+1]))
+            D2 = 1j * mp.exp(-1j * mp.pi * p[-1] / 2) / (mp.sqrt(2) * mp.gamma(p[-1]))
+            pi1 = pi_late(+1)
+            pi2 = pi_late(-1)
 
-        self.pi0 = np.array([complex(pi_p), complex(pi_m)])
+            # Compute weights on the conjugate ray, using conj g_a(1 + it) = g_{-a}(1 - it)
+            weight = {-1: pi1 * mp.conj(1j * C1), +1: pi2 * mp.conj(1j * D2)}
+            s_ray = 1 - 1j * self.t
+            w = np.array([complex(sum(weight[a] * g(a, mp.mpc(si.real, si.imag)) for a in (-1, +1))) for si in s_ray])
+            self.heads = [(complex(weight[a]), complex(p[a])) for a in (-1, +1)]
+
+        self.pi0 = np.array([complex(pi1), complex(pi2)])
         self.rays = [(s_ray, w)]
-        self.d = 0.0
+        self.plane_wave = 0.0
 
     def head_integrals(self):
-        """int_0^t_min dt w and int_0^t_min dt w (s - 1)/(-it), with w ~ sum_a C_a (-it)^{p_a - 1} continued from Re p_a > 0."""
+        """Integrals of w and w (s - 1)/(-it) over 0 < t < t_min (c_s = 1), continued from Re p > 0."""
 
         h0 = 0j
         h1 = 0j
-        for coef, p in self.heads:
+        for weight, p in self.heads:
 
-            h0 += coef * np.exp(-0.5j * np.pi * (p - 1)) * self.t_min**p / p
-            h1 += coef * np.exp(-0.5j * np.pi * p) * self.t_min**(p + 1) / (p + 1)
+            h0 += weight * np.exp(-0.5j * np.pi * (p - 1)) * self.t_min**p / p
+            h1 += weight * np.exp(-0.5j * np.pi * p) * self.t_min**(p + 1) / (p + 1)
         return h0, h1
 
-    def _commutator(self, y_max=5.5):
-        """Tabulate the odd solution h = x + O(x^3) of the fourth-order equation, with Im G^F = -h / (2 k^3 c_s^2)."""
+    def commutator(self, x_max):
+        """h(x) and its first three derivatives, where h = x + O(x^3) is odd and Im G^F = -h / (2 k^3 c_s^2)."""
 
         c2 = self.c_s**2
         m_eff2 = self.m_eff**2
         x0 = X_SERIES / self.s0
-        x_max = y_max / self.s0
+        powers = np.arange(N_SERIES) + 1.0
 
         # Compute the power series
         a = np.zeros(N_SERIES)
@@ -220,9 +220,12 @@ class Modes:
             k = n + 1.0
             a[n] = -(((1 + c2) * (k - 2) * (k - 3) + 2 * c2 * (k - 2) + c2 * (self.m2 - 2)) * a[n - 2]
                      + (c2 * a[n - 4] if n >= 4 else 0.0)) / (k * (k - 1) * (k * k - 3 * k + m_eff2))
-        powers = np.arange(N_SERIES) + 1.0
-        self._series = [a, a * powers, a * powers * (powers - 1), a * powers * (powers - 1) * (powers - 2)]
-        self._x0 = x0
+        series = [a, a * powers, a * powers * (powers - 1), a * powers * (powers - 1) * (powers - 2)]
+
+        def h_series(x, k):
+            """k-th derivative of h from the power series."""
+
+            return (series[k] * x[..., None]**(powers - k)).sum(-1)
 
         def rhs(x, y):
             """Fourth-order equation in first-order form."""
@@ -231,29 +234,25 @@ class Modes:
                                         + c2 * (x * x + self.m2 - 2) * y[0]) / (x * x)]
 
         # Integrate beyond the series and fit Chebyshev panels
-        y0 = [self._h_series(np.array([x0]), k)[0] for k in range(4)]
+        y0 = [h_series(np.array([x0]), k)[0] for k in range(4)]
         sol = solve_ivp(rhs, (x0, x_max), y0, method='DOP853', rtol=1e-13, atol=1e-300, dense_output=True)
-        self._edges = np.append(np.arange(x0, x_max, PANEL_H / self.s0), x_max)
-        self._mid = (self._edges[1:] + self._edges[:-1]) / 2
-        self._half = (self._edges[1:] - self._edges[:-1]) / 2
+        edges = np.append(np.arange(x0, x_max, PANEL_H / self.s0), x_max)
+        mid = (edges[1:] + edges[:-1]) / 2
+        half = (edges[1:] - edges[:-1]) / 2
         xk = np.cos(np.pi * (np.arange(N_CHEB) + 0.5) / N_CHEB)
-        values = sol.sol((self._mid[:, None] + self._half[:, None] * xk).ravel()).reshape(4, len(self._mid), N_CHEB)
-        self._cheb = Ch.chebfit(xk, values.transpose(2, 0, 1).reshape(N_CHEB, -1), N_CHEB - 1).reshape(N_CHEB, 4, len(self._mid))
+        values = sol.sol((mid[:, None] + half[:, None] * xk).ravel()).reshape(4, len(mid), N_CHEB)
+        cheb = Ch.chebfit(xk, values.transpose(2, 0, 1).reshape(N_CHEB, -1), N_CHEB - 1).reshape(N_CHEB, 4, len(mid))
 
-    def _h_series(self, x, k):
-        """k-th derivative of h from the power series."""
+        def h(x):
+            """(h, h', h'', h''') at real 0 <= x <= x_max."""
 
-        exponents = np.arange(N_SERIES) + 1.0
-        return (self._series[k] * x[..., None]**(exponents - k)).sum(-1)
+            x = np.asarray(x, float)
+            out = np.empty((4, len(x)))
+            near = x < x0
+            out[:, near] = [h_series(x[near], k) for k in range(4)]
+            panel = np.minimum(np.searchsorted(edges, x[~near], side='right') - 1, len(mid) - 1)
+            basis = Ch.chebvander((x[~near] - mid[panel]) / half[panel], N_CHEB - 1)
+            out[:, ~near] = np.einsum('ik,kji->ji', basis, cheb[:, :, panel])
+            return out
 
-    def h(self, x):
-        """(h, h', h'', h''') at real x >= 0."""
-
-        x = np.asarray(x, float)
-        out = np.empty((4, len(x)))
-        near = x < self._x0
-        out[:, near] = [self._h_series(x[near], k) for k in range(4)]
-        panel = np.minimum(np.searchsorted(self._edges, x[~near], side='right') - 1, len(self._mid) - 1)
-        basis = Ch.chebvander((x[~near] - self._mid[panel]) / self._half[panel], N_CHEB - 1)
-        out[:, ~near] = np.einsum('ik,kji->ji', basis, self._cheb[:, :, panel])
-        return out
+        return h
