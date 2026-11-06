@@ -3,7 +3,6 @@
 import numpy as np
 import mpmath as mp
 from numpy.polynomial import Polynomial
-from numpy.polynomial import polynomial as P
 from numpy.polynomial import chebyshev as Ch
 from scipy.integrate import solve_ivp
 
@@ -95,16 +94,17 @@ class Modes:
         return np.array([g, dg], complex)
 
     def _step(self, y, s_from, s_to):
-        """Transport (g, g') along a straight segment."""
+        """Transport (G, G'), with G = (s^2 - c_s^2) g, along a straight segment using the Heun equation."""
 
-        p2, p1, p0 = self._heun()
+        c2 = self.c_s**2
+        q = 2 - self.m_eff**2
         ds = s_to - s_from
 
         def rhs(u, yy):
             """First-order form along the segment."""
 
             s = s_from + u * ds
-            return ds * np.array([yy[1], -(P.polyval(s, p1) * yy[1] + P.polyval(s, p0) * yy[0]) / P.polyval(s, p2)])
+            return ds * np.array([yy[1], (2 * s * yy[1] - (q + self.rho**2 * c2 / (c2 - s**2)) * yy[0]) / (1 - s**2)])
 
         return solve_ivp(rhs, (0.0, 1.0), np.asarray(y, complex), method='DOP853', rtol=1e-12, atol=1e-16).y[:, -1]
 
@@ -119,12 +119,13 @@ class Modes:
         # Transport beyond the Taylor disc
         far = np.flatnonzero(far)
         s_prev = r + 0.2 * scale * (s[far[0]] - r) / abs(s[far[0]] - r)
-        y = self._taylor_eval(a, scale, s_prev - r)
+        g0, dg0 = self._taylor_eval(a, scale, s_prev - r)
+        y = np.array([(s_prev**2 - self.c_s**2) * g0, 2 * s_prev * g0 + (s_prev**2 - self.c_s**2) * dg0])
         for i in far:
 
             y = self._step(y, s_prev, s[i])
             s_prev = s[i]
-            g[i] = y[0]
+            g[i] = y[0] / (s[i]**2 - self.c_s**2)
         return g
 
     def _late_time(self, s, g):

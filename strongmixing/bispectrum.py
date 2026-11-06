@@ -112,15 +112,16 @@ class Bispectrum:
             fields, gradient = VERTICES[name]
             power = 2 if gradient else 4
 
-            # Continue the late-time scaling x_t^gamma below the first node
-            n_sigma_pidot = sum(f != 'pi' for f in fields)
-            gamma = 2 * gradient - 1 + (n_sigma_pidot - 1) * (1.5 - modes.nu_eff)
-            dx = (self.dx_late * self.x_late**(-power)).astype(complex)
-            dx[:self.n_first] /= -np.expm1(-LOG_PANEL * (gamma + 1))
+            # Continue the late-time scaling x_t^gamma below the first node (light fields; negligible otherwise)
+            dx = self.dx_late * self.x_late**(-power)
+            if modes.nu_eff.imag == 0:
+                n_sigma_pidot = sum(f != 'pi' for f in fields)
+                gamma = 2 * gradient - 1 + (n_sigma_pidot - 1) * (1.5 - modes.nu_eff.real)
+                dx[:self.n_first] /= -np.expm1(-LOG_PANEL * (gamma + 1))
             deta = self.deta * self.x_early**(-power)
 
             # Sum over assignments of legs to momenta
-            total = 0j
+            total = 0.0
             for perm in permutations(range(3)):
 
                 late = np.prod([legs[j]['late'][f] / (2 * e[j]**3) for f, j in zip(fields, perm)], axis=0)
@@ -130,5 +131,5 @@ class Bispectrum:
                     a, b = perm[1], perm[2]
                     integral = -integral * (e[3 - a - b]**2 - e[a]**2 - e[b]**2) / 2
                 total += integral
-            result[name] = float(-norm * total.real)
+            result[name] = float(-norm * total)
         return result
