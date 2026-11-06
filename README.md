@@ -16,8 +16,7 @@ This repository computes the tree-level bispectrum of the curvature perturbation
 |---|---|
 | `strongmixing/modes.py` | `Modes`: the exact linear mode functions at one point $(c_s,\rho/H,m_{\rm eff}/H)$, the late-time amplitudes $\pi_\alpha(0)$ and the power-spectrum enhancement $\mathcal{R}$. |
 | `strongmixing/bispectrum.py` | `Bispectrum`: the contact bispectrum shapes of the eight cubic vertices, for any triangle. |
-
-The other files (`FastShapes.py`, `FastShapes_c.py`, `FastShapes.ipynb`, `generate_planck_grids.py`, `read_planck_grids.py`) are the earlier implementation, and `Solver.py`, `Theory.py`, `Parameters.py` are `CosmoFlow`, an independent numerical in-in solver used as a cross-check.
+| `Solver.py`, `Theory.py`, `Parameters.py` | `CosmoFlow`: an independent solver of the same in-in problem as a system of ODEs in time, used for validation. Its couplings follow its own conventions, set in `Theory.py`. |
 
 ### Setup
 
@@ -48,7 +47,7 @@ The shape is $S=(k_1k_2k_3)^2B_\zeta/[(2\pi)^4\Delta_\zeta^4]$, where $\Delta_\z
 
 The mode functions are written as superpositions of plane waves, $F_\alpha(x)=\int\mathrm{d}s\,e^{isx}f_\alpha(s)$ with $\pi_\alpha=(1-x\partial_x)F_\alpha$ and $\sigma_\alpha=-(x^2H/\rho)(\partial_x^2+c_s^2)F_\alpha$, whose weight satisfies a Heun equation ($c_s\neq1$) or an associated Legendre equation ($c_s=1$). The frequency integrals run along straight rays from the two light cones, $s=c_s+it$ and $s=1+it$, which coincide at $c_s=1$. For $c_s\neq1$ the weights are obtained from their Taylor series at each cone and transported along the rays with the Heun equation; for $c_s=1$ they are hypergeometric functions. Every bispectrum is then a contact diagram whose legs are the bulk-to-boundary propagators $G^X_k(\tau)=(H^2/2k^3)\sum_\alpha\pi_\alpha(0)X_\alpha^*(-k\tau)$, so all mixing insertions are resummed. The time integral runs along real time from $\tau_*$ (shortly before horizon crossing) to the end of inflation, where the integrand contains at least one commutator and converges for every $m_{\rm eff}>0$, and along $\tau_*+i\eta$ at earlier times, which implements the $i\epsilon$ prescription. Along real time, the imaginary parts of the propagators are obtained directly from the fourth-order equation of motion.
 
-The shapes are computed in the late-time limit. For very light fields this is reached slowly: the error from a finite number $N_{\rm end}$ of $e$-folds after horizon exit scales as $e^{-(3/2-\nu_{\rm eff})N_{\rm end}}$, about $1\%$ at $m_{\rm eff}=H/2$, so we recommend $m_{\rm eff}\gtrsim H/2$.
+The shapes are computed in the late-time limit. For very light fields this is reached slowly: the error from a finite number $N_{\rm end}$ of $e$-folds after horizon exit scales as $e^{-(3/2-\nu_{\rm eff})N_{\rm end}}$, about $1\%$ at $m_{\rm eff}=H/2$ for $N_{\rm end}\approx55$, so we recommend $m_{\rm eff}\gtrsim H/2$.
 
 ---
 
@@ -57,6 +56,8 @@ The shapes are computed in the late-time limit. For very light fields this is re
 ```bash
 pip install numpy scipy mpmath
 ```
+
+`CosmoFlow` also needs `matplotlib`.
 
 No installation is needed: `strongmixing` is imported from a clone of this repository.
 
