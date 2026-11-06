@@ -1,4 +1,4 @@
-[![Python](https://img.shields.io/badge/python-3.8.2-blue.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://choosealicense.com/licenses/mit/)
 [![ArXiv](https://img.shields.io/badge/arXiv-2302...-yellowgreen.svg)](https://google.com)
 
@@ -6,7 +6,7 @@
 
 Code accompanying *"Full-shape constraints of strongly-mixed bispectra with Planck data"* (Philcox, Pinol, Roest & Werth, in prep.) [[arXiv:XXXX.XXXXX]](https://arxiv.org/abs/XXXX.XXXXX).
 
-This repository computes the tree-level bispectrum of every cubic self- and cross-interaction of the curvature perturbation coupled to a massive isocurvature field, with the quadratic mixing ρ treated **exactly** (non-perturbatively), following the exact mode functions and Schwinger-parameter reduction. It also contains the scripts used to produce the public data release of pre-computed shapes.
+This repository computes the tree-level bispectrum of the curvature perturbation for every cubic interaction of the Goldstone mode $\pi$ and an isocurvature scalar $\sigma$ at leading order in gradients, with the quadratic mixing $\rho\dot\pi\sigma$ treated **exactly**. It applies for any sound speeds $c_\pi,c_\sigma\leq1$, any mixing, and any mass with $m_{\rm eff}^2=m^2+\rho^2>0$, including light fields ($m_{\rm eff}<3H/2$) and tachyonic bare masses ($m^2<0$).
 
 ---
 
@@ -14,132 +14,67 @@ This repository computes the tree-level bispectrum of every cubic self- and cros
 
 | File | What it does |
 |---|---|
-| `FastShapes.py` | **Core library.** Exact, semi-analytical bispectrum shapes for all cubic interactions, and their cosine correlation with the equilateral template, as a function of `(m_eff/H, ρ/H)`. This is the main deliverable of the paper's method — see "Method" below. |
-| `FastShapes_c.py` | The kernel table on the real-time contour, for any curvature sound speed $c_s$ (isocurvature sound speed 1) and any $m_{\rm eff}$, including light fields $m_{\rm eff}<3H/2$ for which the Wick-rotated integral of `FastShapes.py` does not converge; the weights are the two Heun solutions for $c_s\neq1$ and the closed form of `FastShapes.py` at $c_s=1$. Every shape function of `FastShapes.py` accepts it unchanged. |
-| `FastShapes.ipynb` | Tutorial notebook: reproduces the letter's Figure 1, computes full 3D shapes, cross-checks against `CosmoFlow`, and scans the cosine correlation across parameter space. Start here. |
-| `Solver.py`, `Theory.py`, `Parameters.py` | `CosmoFlow`: an independent numerical solver that integrates the same in-in problem as a system of ODEs in time, without assuming any hierarchy between ρ and H. Used only as a cross-check — orders of magnitude slower than `FastShapes.py`, and not intended for large parameter scans. |
-| `generate_planck_grids.py` | Production script: computes the full shape (and cosine) on a `(μ_eff, lambda)` grid, for all 5 interactions, and writes the public data release. Resumable/checkpointed. |
-| `read_planck_grids.py` | Loads the `.npz` files produced above and makes the standard diagnostic plots (cosine map, single full 3D shape). |
+| `strongmixing/modes.py` | `Modes`: the exact linear mode functions at one point $(c_s,\rho/H,m_{\rm eff}/H)$, the late-time amplitudes $\pi_\alpha(0)$ and the power-spectrum enhancement $\mathcal{R}$. |
+| `strongmixing/bispectrum.py` | `Bispectrum`: the contact bispectrum shapes of the eight cubic vertices, for any triangle. |
+
+The other files (`FastShapes.py`, `FastShapes_c.py`, `FastShapes.ipynb`, `generate_planck_grids.py`, `read_planck_grids.py`) are the earlier implementation, and `Solver.py`, `Theory.py`, `Parameters.py` are `CosmoFlow`, an independent numerical in-in solver used as a cross-check.
+
+### Setup
+
+After rescaling space by $c_\sigma$, the quadratic Lagrangian is
+$$a^{-3}\tilde{\mathcal{L}}_2=\tfrac12\left[\dot\pi_c^2-c_s^2(\tilde\partial_i\pi_c)^2/a^2\right]+\tfrac12\left[\dot\sigma_c^2-(\tilde\partial_i\sigma_c)^2/a^2-m^2\sigma_c^2\right]+\rho\dot\pi_c\sigma_c,$$
+with $c_s=c_\pi/c_\sigma$, canonical fields $\pi_c=(f_\pi^2/c_s^{3/2})\pi$ and $\sigma_c=c_\sigma^{1/2}\sigma$, $f_\pi^4=2M_{\rm pl}^2|\dot H|c_\pi$, and $\zeta=-H\pi$.
 
 ### The interactions
 
-The minimal EFT of an inflationary Goldstone $\pi$ coupled to a massive isocurvature field $\sigma$ through a quadratic mixing ρ has exactly five independent cubic self- and cross-interactions (at unit sound speed):
+Each vertex is a term $-\lambda(\partial_t^{n_1}X_1)(\partial_t^{n_2}X_2)(\partial_t^{n_3}X_3)$ or $-\lambda' a^{-2}(\partial_t^{n_1}Y_1)(\tilde\partial_iY_2)(\tilde\partial^iY_3)$ in $a^{-3}\tilde{\mathcal{L}}_3$:
 
-| Interaction | Coupling | `FastShapes.py` function |
+| Vertex | Key | Shape returned per unit |
 |---|---|---|
-| $\dot\pi_c^3$ | $\kappa_1$ | `shape_pidot3` |
-| $\dot\pi_c^2\sigma$ | $\lambda_{11}$ | `shape_single_parallel` |
-| $(\partial_i\pi_c)^2\sigma/a^2$ | $\lambda_{12}$ | `shape_single_perp` |
-| $\dot\pi_c\sigma^2$ | $\lambda_2$ | `shape_double` |
-| $\sigma^3$ | $\lambda_3$ | `shape_triple` |
+| $\dot\pi_c^3$ | `pidot3` | $\lambda H^2/\Delta_\zeta$ |
+| $\sigma_c\dot\pi_c^2$ | `sigma_pidot2` | $\lambda H/\Delta_\zeta$ |
+| $\dot\pi_c\sigma_c^2$ | `pidot_sigma2` | $\lambda/\Delta_\zeta$ |
+| $\dot\pi_c\dot\sigma_c^2$ | `pidot_sigmadot2` | $\lambda H^2/\Delta_\zeta$ |
+| $\sigma_c^3$ | `sigma3` | $\lambda H^{-1}/\Delta_\zeta$ |
+| $\dot\pi_c(\tilde\partial_i\pi_c)^2/a^2$ | `pidot_dpi2` | $\lambda' H^2/\Delta_\zeta$ |
+| $\sigma_c(\tilde\partial_i\pi_c)^2/a^2$ | `sigma_dpi2` | $\lambda' H/\Delta_\zeta$ |
+| $\dot\sigma_c\tilde\partial_i\pi_c\tilde\partial^i\sigma_c/a^2$ | `sigmadot_dpi_dsigma` | $\lambda' H^2/\Delta_\zeta$ |
 
-For $c_s\neq1$, or an isocurvature sound speed $c_\sigma\neq1$, the same EFT generates one more cubic interaction each, which vanishes at unit sound speed:
-
-| Interaction | Coupling | `FastShapes.py` function |
-|---|---|---|
-| $\dot\pi_c(\partial_i\pi_c)^2/a^2$ | $b$ | `shape_pidot_gradpi2` |
-| $\dot\sigma\,\partial_i\pi_c\partial_i\sigma/a^2$ | $\beta$ | `shape_sigmadot_dpi_dsigma` |
-
-This is the convention used consistently by `Theory.py` (the `CosmoFlow` Lagrangian) and by `FastShapes.py`'s own docstring, and is what `FastShapes.ipynb` cross-checks one against the other.
+The shape is $S=(k_1k_2k_3)^2B_\zeta/[(2\pi)^4\Delta_\zeta^4]$, where $\Delta_\zeta^2=\mathcal{R}H^4/(4\pi^2f_\pi^4)$ is the full (mixed) power spectrum. With the convention $\tfrac{5}{18}B_\zeta/(P_1P_2P_3)^{2/3}=f_{\rm NL}S^{\rm th}$ of the [Planck binned shape](https://github.com/oliverphilcox/Binned-Bispectrum-Shape), $\tfrac{5}{18}B_\zeta/(P_1P_2P_3)^{2/3}=\tfrac{10}{9}S$.
 
 ---
 
 ## Method (brief)
 
-Because the quadratic mixing is resummed exactly rather than treated as a small perturbation, every one of the interactions above reduces, at tree level, to a **single-vertex (contact) diagram** — the number of σ legs it carries is simply a bookkeeping label, not an internal exchange line. Each such diagram reduces further to a one-dimensional Schwinger-parameter integral over a product of leg kernels, all built from one weight function $\omega_a(u)$ tabulated once per $(\mu_{\rm eff},\lambda)$ point. This is what makes `FastShapes.py` many orders of magnitude faster than solving the coupled in-in problem numerically (`CosmoFlow`), and is what makes a full parameter-space scan for a Planck analysis computationally tractable at all. See the paper for the full derivation; `FastShapes.py`'s module docstring gives a self-contained summary of the numerical scheme (kernel tabulation, the log-substitution used to handle a marginal boundary singularity, and the channel-sum factorisation). The quadrature grids default to the converged production set; `set_grids` changes them.
+The mode functions are written as superpositions of plane waves, $F_\alpha(x)=\int\mathrm{d}s\,e^{isx}f_\alpha(s)$ with $\pi_\alpha=(1-x\partial_x)F_\alpha$ and $\sigma_\alpha=-(x^2H/\rho)(\partial_x^2+c_s^2)F_\alpha$, whose weight satisfies a Heun equation ($c_s\neq1$) or an associated Legendre equation ($c_s=1$). The frequency integrals run along straight rays from the two light cones, $s=c_s+it$ and $s=1+it$, which coincide at $c_s=1$. For $c_s\neq1$ the weights are obtained from their Taylor series at each cone and transported along the rays with the Heun equation; for $c_s=1$ they are hypergeometric functions. Every bispectrum is then a contact diagram whose legs are the bulk-to-boundary propagators $G^X_k(\tau)=(H^2/2k^3)\sum_\alpha\pi_\alpha(0)X_\alpha^*(-k\tau)$, so all mixing insertions are resummed. The time integral runs along real time from $\tau_*$ (shortly before horizon crossing) to the end of inflation, where the integrand contains at least one commutator and converges for every $m_{\rm eff}>0$, and along $\tau_*+i\eta$ at earlier times, which implements the $i\epsilon$ prescription. Along real time, the imaginary parts of the propagators are obtained directly from the fourth-order equation of motion.
+
+The shapes are computed in the late-time limit. For very light fields this is reached slowly: the error from a finite number $N_{\rm end}$ of $e$-folds after horizon exit scales as $e^{-(3/2-\nu_{\rm eff})N_{\rm end}}$, about $1\%$ at $m_{\rm eff}=H/2$, so we recommend $m_{\rm eff}\gtrsim H/2$.
 
 ---
 
 ## Installation
 
 ```bash
-pip install numpy scipy mpmath matplotlib joblib
+pip install numpy scipy mpmath
 ```
 
-No package-level installation is needed — the scripts are meant to be used directly from a clone of this repository (`FastShapes.py` etc. are imported by file name, not as an installed package).
-
-Python ≥ 3.9 recommended. `joblib` is only needed for the `CosmoFlow` cross-check cells in the notebook (`FastShapes.py`'s own parallelism uses the standard-library `concurrent.futures` and has no extra dependency).
+No installation is needed: `strongmixing` is imported from a clone of this repository.
 
 ---
 
 ## Quickstart
 
-### 1. A single shape, at a single triangle
-
 ```python
-from FastShapes import build_kernel_table, shape_pidot3
+from strongmixing import Modes, Bispectrum
 
-# table caches everything that depends on (m_eff/H, rho/H) -- build once, reuse for
-# any number of triangles and any of the shape functions.
-table = build_kernel_table(meff_over_H=3.5, rho_over_H=3.16)
+# Mode functions at c_s = 0.5, rho/H = 3.16, m_eff/H = 3.5
+modes = Modes(c_s=0.5, rho=3.16, m_eff=3.5)
+print(modes.R)
 
-S = shape_pidot3(k1=1.0, k2=0.8, k3=0.6, table=table)
+# All eight shapes at one triangle, or a subset
+bispectrum = Bispectrum(modes)
+S = bispectrum.shapes(1.0, 0.8, 0.6)
+S_pidot3 = bispectrum.shapes(1.0, 0.8, 0.6, names=['pidot3'])['pidot3']
 ```
 
-### 2. The full shape over a triangle grid
-
-```python
-from FastShapes import build_kernel_table, make_triangle_grid, shape_many_double
-
-table = build_kernel_table(meff_over_H=3.5, rho_over_H=3.16)
-k1s, k2s, k3s = make_triangle_grid(n1=60, n2=60)   # n1*n2 triangles, log-spaced in the squeezed direction
-S_grid = shape_many_double(k1s, k2s, k3s, table)
-```
-
-### 3. Cosine correlation with the equilateral template, across parameter space
-
-```python
-from FastShapes import scan_cosine_grid_triple
-import numpy as np
-
-mu_eff_grid = np.linspace(0.5, 3.0, 20)
-lam_grid = np.linspace(0.5, 3.0, 20)
-cos_grid = scan_cosine_grid_triple(mu_eff_grid, lam_grid, cache_dir='kernel_cache', n_jobs=6)
-```
-
-`cache_dir` matters here: it caches the expensive per-point kernel tabulation to disk, so repeated or resumed scans don't redo work already done — always set it for anything beyond a quick test.
-
-### 4. Unequal sound speeds and light fields
-
-```python
-from FastShapes import shape_pidot3
-from FastShapes_c import build_kernel_table_c
-
-# c_pi = 0.5, c_sigma = 1; the table is used exactly like the one from build_kernel_table.
-# The same call with c=1, or with meff_over_H < 1.5 (any c), evaluates the shapes on the real-time contour,
-# which converges for every m_eff > 0; the late-time limit is taken (N_end -> infinity).
-table = build_kernel_table_c(meff_over_H=3.5, rho_over_H=3.16, c=0.5)
-
-S = shape_pidot3(k1=1.0, k2=0.8, k3=0.6, table=table)
-```
-
-For the first three, see `FastShapes.ipynb` for the exact cell-by-cell workflow, including the equivalent calls for the other four interactions and the accompanying plots.
-
----
-
-## Reproducing the public data release
-
-The paper's full-shape Planck analysis uses a pre-computed grid: `50×50` in `(ρ/H, μ_eff)`, with the full shape evaluated on a `30×30` triangle grid at every point, for all 5 interactions. To regenerate it:
-
-```bash
-python generate_planck_grids.py --n_jobs -1
-```
-
-**This is expensive** — at the default `100×100` triangle resolution this is a multi-hour run even with full parallelisation (`--n_jobs -1` uses all available cores); budget accordingly. For a quick smoke test first:
-
-```bash
-python generate_planck_grids.py --n_grid 5 --n_tri1 8 --n_tri2 6
-```
-
-The run is checkpointed after every completed row of the parameter grid, so an interrupted run resumes automatically (already-finite rows are skipped) — just re-run the same command. Output is one `shapes_{n_grid}x{n_grid}_{interaction}.npz` file per interaction; see `generate_planck_grids.py`'s module docstring for the exact array format (axes, units, what `cos`/`seq` mean).
-
-The pre-computed grids themselves are hosted at **\[data release URL — Zenodo / GitHub release, TBD\]** rather than committed to this repository directly (they are large).
-
-To load and inspect them:
-
-```bash
-python read_planck_grids.py shapes_50x50_pidot3.npz --mu_eff 3.0 --rho_over_H 3.16
-```
-
-or from Python, via `read_planck_grids.load`, `plot_cosine_map`, `plot_full_shape` (see that file's docstring).
-
+A `Bispectrum` is reused for any number of triangles at the same parameter point.
