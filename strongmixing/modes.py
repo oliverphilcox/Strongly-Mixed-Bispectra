@@ -36,7 +36,7 @@ class Modes:
         sum_alpha pi_alpha(0) F_alpha^*(x) = plane_wave e^{-i c_s x} + sum_alpha int dt w_alpha(s) e^{-isx}.
     """
 
-    def __init__(self, c_s, rho, m_eff):
+    def __init__(self, c_s, rho, m_eff, n_nodes=NODES_PER_PANEL):
 
         self.c_s = float(c_s)
         self.rho = float(rho)
@@ -46,7 +46,7 @@ class Modes:
         self.s0 = min(self.c_s, 1.0)
 
         # Set up nodes along the rays
-        log_t, w_log = gauss_legendre(LOG_T_EDGES)
+        log_t, w_log = gauss_legendre(LOG_T_EDGES, n_nodes)
         self.t = 2 * self.s0 * np.exp(log_t)
         self.dt = w_log * self.t
         self.t_min = 2 * self.s0 * np.exp(LOG_T_EDGES[0])

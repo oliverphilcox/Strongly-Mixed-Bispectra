@@ -9,7 +9,7 @@ from itertools import permutations
 
 import numpy as np
 
-from .modes import gauss_legendre
+from .modes import gauss_legendre, NODES_PER_PANEL
 
 Y_STAR = 10.0
 LOG_X_MIN = -15.0
@@ -34,7 +34,7 @@ VERTICES = {
 class Bispectrum:
     """Contact bispectra for one set of mode functions."""
 
-    def __init__(self, modes):
+    def __init__(self, modes, n_nodes=NODES_PER_PANEL):
 
         self.modes = modes
         c = modes.c_s
@@ -42,18 +42,18 @@ class Bispectrum:
 
         # Set up late times, x_t = -k_t tau in (0, x_*)
         edges = np.append(np.arange(LOG_X_MIN, np.log(X_LIN), LOG_PANEL), np.log(X_LIN))
-        x_log, w_log = gauss_legendre(edges)
+        x_log, w_log = gauss_legendre(edges, n_nodes)
         x_log = np.exp(x_log)
         n_lin = int(np.ceil((Y_STAR - X_LIN) * max(c, 1 / c) / PANEL))
-        x_lin, w_lin = gauss_legendre(np.linspace(X_LIN, Y_STAR, n_lin + 1))
+        x_lin, w_lin = gauss_legendre(np.linspace(X_LIN, Y_STAR, n_lin + 1), n_nodes)
         self.x_late = np.concatenate([x_log, x_lin]) / s0
         self.dx_late = np.concatenate([x_log * w_log, w_lin]) / s0
         self.n_first = len(x_log) // (len(edges) - 1)
 
         # Set up early times, x_t = x_* - i eta
-        eta_lin, w_lin = gauss_legendre([0.0, ETA_LIN])
+        eta_lin, w_lin = gauss_legendre([0.0, ETA_LIN], n_nodes)
         edges = np.append(np.arange(np.log(ETA_LIN), np.log(ETA_MAX), LOG_PANEL), np.log(ETA_MAX))
-        eta_log, w_log = gauss_legendre(edges)
+        eta_log, w_log = gauss_legendre(edges, n_nodes)
         eta_log = np.exp(eta_log)
         self.x_early = (Y_STAR - 1j * np.concatenate([eta_lin, eta_log])) / s0
         self.deta = np.concatenate([w_lin, eta_log * w_log]) / s0
