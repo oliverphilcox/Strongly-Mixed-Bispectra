@@ -236,7 +236,7 @@ class Modes:
 
         # Integrate beyond the series and fit Chebyshev panels
         y0 = [h_series(np.array([x0]), k)[0] for k in range(4)]
-        sol = solve_ivp(rhs, (x0, x_max), y0, method='DOP853', rtol=1e-13, atol=1e-300, dense_output=True)
+        sol = solve_ivp(rhs, (x0, x_max), y0, method='DOP853', rtol=1e-12, atol=1e-300, dense_output=True)
         edges = np.append(np.arange(x0, x_max, PANEL_H / max(self.c_s, 1.0)), x_max)
         mid = (edges[1:] + edges[:-1]) / 2
         half = (edges[1:] - edges[:-1]) / 2
