@@ -28,19 +28,19 @@ def gauss_legendre(edges, n=NODES_PER_PANEL):
 
 
 class Modes:
-    """Mode functions at sound-speed ratio c_s, mixing rho and effective mass m_eff, with m_eff^2 = m^2 + rho^2 > 0.
+    """Mode functions at sound-speed ratio c_s, mixing lambda and effective mass m_eff, with m_eff^2 = m^2 + lambda^2 > 0.
 
     Along the conjugate rays s = s_alpha - it from the light cones s = c_s and s = 1,
 
         sum_alpha pi_alpha(0) F_alpha^*(x) = plane_wave e^{-i c_s x} + sum_alpha int dt w_alpha(s) e^{-isx}.
     """
 
-    def __init__(self, c_s, rho, m_eff, n_nodes=NODES_PER_PANEL):
+    def __init__(self, c_s, lam, m_eff, n_nodes=NODES_PER_PANEL):
 
         self.c_s = float(c_s)
-        self.rho = float(rho)
+        self.lam = float(lam)
         self.m_eff = float(m_eff)
-        self.m2 = self.m_eff**2 - self.rho**2
+        self.m2 = self.m_eff**2 - self.lam**2
         self.nu_eff = np.sqrt(2.25 - self.m_eff**2 + 0j)
         self.s0 = min(self.c_s, 1.0)
 
@@ -64,7 +64,7 @@ class Modes:
         c2 = self.c_s**2
         p2 = np.array([c2, 0.0, -(1 + c2), 0.0, 1.0])
         p1 = np.array([0.0, -2 * (2 + c2), 0.0, 6.0])
-        p0 = np.array([-2 + (2 - self.m2) * c2, 0.0, self.m2 + self.rho**2 + 4])
+        p0 = np.array([-2 + (2 - self.m2) * c2, 0.0, self.m2 + self.lam**2 + 4])
         return p2, p1, p0
 
     def _taylor(self, r, n_max=80):
@@ -104,7 +104,7 @@ class Modes:
             """First-order form along the segment."""
 
             s = s_from + u * ds
-            return ds * np.array([yy[1], (2 * s * yy[1] - (q + self.rho**2 * c2 / (c2 - s**2)) * yy[0]) / (1 - s**2)])
+            return ds * np.array([yy[1], (2 * s * yy[1] - (q + self.lam**2 * c2 / (c2 - s**2)) * yy[0]) / (1 - s**2)])
 
         return solve_ivp(rhs, (0.0, 1.0), np.asarray(y, complex), method='DOP853', rtol=1e-12, atol=1e-16).y[:, -1]
 
@@ -140,8 +140,8 @@ class Modes:
         """g_pi from s = c_s and g_sigma from s = 1."""
 
         c = self.c_s
-        A1 = 1j * self.rho**2 / (2 * np.sqrt(c) * (1 - c**2))
-        B2 = -1j * self.rho / (1 - c**2)
+        A1 = 1j * self.lam**2 / (2 * np.sqrt(c) * (1 - c**2))
+        B2 = -1j * self.lam / (1 - c**2)
         s_pi = c - 1j * self.t
         s_sigma = 1 - 1j * self.t
         g_pi = self._ray(c, s_pi)
@@ -163,7 +163,7 @@ class Modes:
         with mp.workdps(20):
 
             nu = mp.sqrt(mp.mpf('2.25') - mp.mpf(self.m_eff)**2)
-            p = {+1: mp.mpc(0, self.rho / 2), -1: mp.mpc(0, -self.rho / 2)}
+            p = {+1: mp.mpc(0, self.lam / 2), -1: mp.mpc(0, -self.lam / 2)}
 
             def g(a, s):
                 """Legendre solution g_a(s)."""

@@ -1,7 +1,7 @@
 """Tree-level contact bispectra of the pi-sigma system with exact quadratic mixing, in units H = 1.
 
-For a vertex -lambda (d_t^{n_1} X_1)(d_t^{n_2} X_2)(d_t^{n_3} X_3) or -lambda' a^{-2} (d_t^{n_1} Y_1)(d_i Y_2)(d^i Y_3) in
-a^{-3} L_3, the shape S = (k_1 k_2 k_3)^2 B / ((2 pi)^4 Delta_zeta^4) is returned per unit lambda / Delta_zeta. The time
+For a vertex -kappa (d_t^{n_1} X_1)(d_t^{n_2} X_2)(d_t^{n_3} X_3) or -kappa' a^{-2} (d_t^{n_1} Y_1)(d_i Y_2)(d^i Y_3) in
+a^{-3} L_3, the shape S = (k_1 k_2 k_3)^2 B / ((2 pi)^4 Delta_zeta^4) is returned per unit kappa / Delta_zeta. The time
 integral runs along real time from tau_* to 0, and along tau_* - eta e^{-i theta} / k_t before.
 """
 
@@ -90,16 +90,16 @@ class Bispectrum:
             # Apply the operators giving each leg
             legs = {'pi': mom[0] + 1j * x * mom[1] + plane * (1 + 1j * c * x),
                     'pidot': -x**2 * (mom[2] + c**2 * plane),
-                    'sigma': x**2 * mom_sigma0 / modes.rho,
-                    'sigmadot': -x**2 * (2 * mom_sigma0 - 1j * x * mom_sigma1) / modes.rho}
+                    'sigma': x**2 * mom_sigma0 / modes.lam,
+                    'sigmadot': -x**2 * (2 * mom_sigma0 - 1j * x * mom_sigma1) / modes.lam}
 
             # Replace imaginary parts by the commutator along real time
             if part == 'late':
                 h, dh, d2h, d3h = self.h(x)
                 im = {'pi': -(h - x * dh) / c**2,
                       'pidot': -x**2 * d2h / c**2,
-                      'sigma': x**2 * (d2h + c**2 * h) / (modes.rho * c**2),
-                      'sigmadot': -x**2 * (2 * (d2h + c**2 * h) + x * (d3h + c**2 * dh)) / (modes.rho * c**2)}
+                      'sigma': x**2 * (d2h + c**2 * h) / (modes.lam * c**2),
+                      'sigmadot': -x**2 * (2 * (d2h + c**2 * h) + x * (d3h + c**2 * dh)) / (modes.lam * c**2)}
                 legs = {k: v.real + 1j * im[k] for k, v in legs.items()}
             out[part] = legs
         return out
