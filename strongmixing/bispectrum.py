@@ -2,7 +2,7 @@
 
 For a vertex -lambda (d_t^{n_1} X_1)(d_t^{n_2} X_2)(d_t^{n_3} X_3) or -lambda' a^{-2} (d_t^{n_1} Y_1)(d_i Y_2)(d^i Y_3) in
 a^{-3} L_3, the shape S = (k_1 k_2 k_3)^2 B / ((2 pi)^4 Delta_zeta^4) is returned per unit lambda / Delta_zeta. The time
-integral runs along real time from tau_* to 0, and along tau_* + i eta before.
+integral runs along real time from tau_* to 0, and along tau_* - eta e^{-i theta} / k_t before.
 """
 
 from itertools import permutations
@@ -12,7 +12,8 @@ import numpy as np
 from .modes import gauss_legendre, NODES_PER_PANEL
 
 Y_STAR = 10.0
-LOG_X_MIN = -15.0
+THETA = np.pi / 4
+LOG_X_MIN = -20.0
 LOG_PANEL = 1.6
 X_LIN = 0.3
 PANEL = 4.0
@@ -40,25 +41,29 @@ class Bispectrum:
         c = modes.c_s
         s0 = modes.s0
 
-        # Set up late times, x_t = -k_t tau in (0, x_*)
-        edges = np.append(np.arange(LOG_X_MIN, np.log(X_LIN), LOG_PANEL), np.log(X_LIN))
+        # Set up late times, x_t = -k_t tau in (0, x_*), with x_* beyond the faster sound horizon and any tachyonic growth
+        y_star = s0 * max(Y_STAR / max(c, 1), np.sqrt(max(0.0, -modes.m2)))
+        y_lin = min(X_LIN, y_star / 2)
+        edges = np.append(np.arange(LOG_X_MIN, np.log(y_lin), LOG_PANEL), np.log(y_lin))
         x_log, w_log = gauss_legendre(edges, n_nodes)
         x_log = np.exp(x_log)
-        n_lin = int(np.ceil((Y_STAR - X_LIN) * max(c, 1 / c) / PANEL))
-        x_lin, w_lin = gauss_legendre(np.linspace(X_LIN, Y_STAR, n_lin + 1), n_nodes)
+        n_lin = int(np.ceil((y_star - y_lin) * max(c, 1 / c) / PANEL))
+        x_lin, w_lin = gauss_legendre(np.linspace(y_lin, y_star, n_lin + 1), n_nodes)
         self.x_late = np.concatenate([x_log, x_lin]) / s0
         self.dx_late = np.concatenate([x_log * w_log, w_lin]) / s0
         self.n_first = len(x_log) // (len(edges) - 1)
 
-        # Set up early times, x_t = x_* - i eta
+        # Set up early times, x_t = x_* + eta e^{-i theta}
+        eta_max = ETA_MAX / np.sin(THETA)
         eta_lin, w_lin = gauss_legendre([0.0, ETA_LIN], n_nodes)
-        edges = np.append(np.arange(np.log(ETA_LIN), np.log(ETA_MAX), LOG_PANEL), np.log(ETA_MAX))
+        edges = np.append(np.arange(np.log(ETA_LIN), np.log(eta_max), LOG_PANEL), np.log(eta_max))
         eta_log, w_log = gauss_legendre(edges, n_nodes)
         eta_log = np.exp(eta_log)
-        self.x_early = (Y_STAR - 1j * np.concatenate([eta_lin, eta_log])) / s0
+        self.direction = np.exp(-1j * THETA)
+        self.x_early = (y_star + self.direction * np.concatenate([eta_lin, eta_log])) / s0
         self.deta = np.concatenate([w_lin, eta_log * w_log]) / s0
 
-        self.h = modes.commutator((Y_STAR / 2 + 0.5) / s0)
+        self.h = modes.commutator((y_star / 2 + 0.5) / s0)
 
     def propagators(self, e):
         """2 k^3 G at x = e x_t for the legs pi, pidot, sigma and sigmadot, along late and early times."""
@@ -126,7 +131,7 @@ class Bispectrum:
 
                 late = np.prod([legs[j]['late'][f] / (2 * e[j]**3) for f, j in zip(fields, perm)], axis=0)
                 early = np.prod([legs[j]['early'][f] / (2 * e[j]**3) for f, j in zip(fields, perm)], axis=0)
-                integral = np.sum(dx * late.imag) - np.sum(deta * early).real
+                integral = np.sum(dx * late.imag) + np.imag(self.direction * np.sum(deta * early))
                 if gradient:
                     a, b = perm[1], perm[2]
                     integral = -integral * (e[3 - a - b]**2 - e[a]**2 - e[b]**2) / 2

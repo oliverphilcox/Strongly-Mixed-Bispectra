@@ -6,8 +6,8 @@ from numpy.polynomial import Polynomial
 from numpy.polynomial import chebyshev as Ch
 from scipy.integrate import solve_ivp
 
-LOG_T_EDGES = np.arange(-30.0, 26.0, 1.5)
-NODES_PER_PANEL = 14
+LOG_T_EDGES = np.arange(-30.0, 32.0, 1.5)
+NODES_PER_PANEL = 20
 X_SERIES = 0.3
 N_SERIES = 60
 PANEL_H = 0.25
